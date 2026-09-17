@@ -8,7 +8,8 @@ the game's visual identity. See [vision](../00-vision.md) pillar 2.
 ## 1. Phases
 
 Eight phases from `StormPhaseBlueprint` assets, ordered by `PhaseIndex`. Shipped
-defaults are in GDD §7.
+defaults are in GDD §7; they total **16:40**, which is the figure the match-length
+check in `tools/validate_blueprints.py` re-derives rather than trusts.
 
 Each phase runs:
 

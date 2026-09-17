@@ -21,13 +21,19 @@ defaults; tuning happens in the Editor.
 | Lobby | until 100 players or 90 s timeout | Players join, load, idle in a pre-match island |
 | Bus | 45 s | Transport crosses the map on a random chord; players eject at will |
 | Freefall | ~12 s | Dive control, glider auto-deploys at 35 m above ground |
-| Early game | 0:00–4:00 | Storm 0 covers whole map, no damage. Looting phase. |
-| Mid game | 4:00–13:00 | Storm phases 1–4. Rotations and fights. |
-| End game | 13:00–18:00 | Storm phases 5–7. Small circles, heavy building. |
+| Early game | 0:00–4:45 | Storm 0 covers most of the map. Looting phase. |
+| Mid game | 4:45–12:05 | Storm phases 1–3. Rotations and fights. |
+| End game | 12:05–16:40 | Storm phases 4–7. Small circles, heavy building. |
 | Victory | — | Last player standing |
 
-Target match length is **16–18 minutes**. Matches longer than 22 minutes are a
-tuning bug, not a design outcome.
+The match clock starts when the first player lands. The storm schedule in §7
+totals **16:40**, so a full match runs about **17:40** door to door including
+the bus and freefall. Matches longer than 22 minutes are a tuning bug, not a
+design outcome.
+
+These numbers are the sum of the §7 table, not an aspiration written beside it —
+`tools/validate_blueprints.py` re-adds them in CI and warns if the shipped storm
+assets drift outside the 12–22 minute band.
 
 ### 1.2 The night clock
 
@@ -259,16 +265,20 @@ only.
 
 Full spec: [systems/storm.md](systems/storm.md).
 
-| Phase | Wait (s) | Close (s) | Radius (m) | DPS |
-| --- | --- | --- | --- | --- |
-| 0 | 210 | 180 | 1400 → 900 | 1 |
-| 1 | 120 | 120 | 900 → 600 | 1 |
-| 2 | 120 | 100 | 600 → 400 | 2 |
-| 3 | 90 | 90 | 400 → 250 | 5 |
-| 4 | 75 | 75 | 250 → 150 | 7 |
-| 5 | 60 | 60 | 150 → 80 | 10 |
-| 6 | 45 | 45 | 80 → 30 | 10 |
-| 7 | 30 | 60 | 30 → 0 | 10 |
+| Phase | Wait (s) | Close (s) | Radius (m) | DPS | Ends at |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 165 | 120 | 1400 → 900 | 1 | 4:45 |
+| 1 | 90 | 90 | 900 → 600 | 1 | 7:45 |
+| 2 | 75 | 70 | 600 → 400 | 2 | 10:10 |
+| 3 | 60 | 55 | 400 → 250 | 5 | 12:05 |
+| 4 | 45 | 45 | 250 → 150 | 7 | 13:35 |
+| 5 | 35 | 35 | 150 → 80 | 10 | 14:45 |
+| 6 | 30 | 30 | 80 → 30 | 10 | 15:45 |
+| 7 | 20 | 35 | 30 → 0 | 10 | 16:40 |
+
+Each phase's start radius equals the previous phase's end radius. A gap there is
+a circle that silently teleports mid-match, so it is a cross-asset validation
+error rather than a matter of care.
 
 Each phase's next centre is chosen inside the current circle with a bias toward
 the centroid of surviving players, clamped so that no player is ever more than
