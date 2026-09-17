@@ -1,0 +1,28 @@
+* text=auto eol=lf
+
+# Unity YAML assets — use UnityYAMLMerge (configure via `git config merge.unityyamlmerge.*`)
+*.unity        merge=unityyamlmerge eol=lf
+*.prefab       merge=unityyamlmerge eol=lf
+*.asset        merge=unityyamlmerge eol=lf
+*.mat          merge=unityyamlmerge eol=lf
+*.anim         merge=unityyamlmerge eol=lf
+*.controller   merge=unityyamlmerge eol=lf
+*.meta         merge=unityyamlmerge eol=lf
+*.asmdef       text eol=lf
+
+# Binary assets — never diff, never merge
+*.blend        binary
+*.fbx          binary
+*.glb          binary
+*.png          binary
+*.jpg          binary
+*.tga          binary
+*.wav          binary
+*.ogg          binary
+*.ttf          binary
+*.otf          binary
+
+*.cs   text diff=csharp eol=lf
+*.py   text diff=python eol=lf
+*.md   text eol=lf
+*.json text eol=lf
