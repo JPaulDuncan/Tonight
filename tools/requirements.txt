@@ -1,0 +1,12 @@
+# Tooling and test dependencies for Tonight.
+#
+# The generator library itself has NO runtime dependencies beyond the standard
+# library -- that is deliberate, so it imports and tests cleanly anywhere,
+# including inside Blender's bundled Python.
+
+pytest==8.3.4
+
+# Blender is NOT installed via pip. Install 4.2 LTS or newer from blender.org.
+# The version matters: ADR-0004 pins it because mesh operator behaviour can
+# change between releases and would break generator determinism.
+#   Supported: Blender 4.2 LTS - 4.5
