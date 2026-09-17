@@ -1,0 +1,14 @@
+{
+    "name": "Tonight.Gameplay",
+    "rootNamespace": "Tonight.Gameplay",
+    "references": ["Tonight.Core", "Tonight.Blueprints"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
