@@ -29,6 +29,27 @@ box with a ramp inside it.
 The ramp/cone sharing one `Interior` slot is deliberate: a cell cannot contain
 both, so placing a ramp over a cone replaces it rather than stacking.
 
+### 1.1 Canonical slots
+
+Two adjacent cells share a face. A wall on the **north** face of cell C is the
+same physical wall as one on the **south** face of C's north neighbour, so the
+two namings must resolve to one key — otherwise two players building on
+opposite sides of the same boundary would each succeed and produce coincident,
+double-health geometry.
+
+Every `(cell, slot)` is therefore canonicalised before use:
+
+| Named as | Stored as |
+| --- | --- |
+| `SouthFace` of cell C | `NorthFace` of C + (0, 0, −1) |
+| `WestFace` of cell C | `EastFace` of C + (−1, 0, 0) |
+| `FloorFace`, `NorthFace`, `EastFace`, `Interior` | unchanged |
+
+`BuildGrid.Canonicalise` owns this, and every structure lookup goes through it.
+Occupancy queries answer correctly from either side as a result: asking whether
+the south face of the northern cell is free returns true once the wall exists,
+whichever way it was placed.
+
 ## 2. Placement
 
 ### 2.1 Target resolution
