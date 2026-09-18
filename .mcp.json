@@ -8,18 +8,6 @@
         "BLENDER_HOST": "localhost",
         "BLENDER_PORT": "9876"
       }
-    },
-    "unity": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "${UNITY_MCP_SERVER_DIR}",
-        "server.py"
-      ],
-      "env": {
-        "UNITY_PROJECT_PATH": "${workspaceFolder}/unity/Tonight"
-      }
     }
   }
 }

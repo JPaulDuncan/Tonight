@@ -13,15 +13,17 @@ from pathlib import Path
 
 from tonight.mesh import MeshData
 
-#: Repository-relative export root. Gitignored: exported FBX is build output,
+#: Repository-relative export root. Gitignored: exported meshes are build output,
 #: regenerated from the Python that is the real source of truth (ADR-0004).
 EXPORT_ROOT = Path("blender/exports")
 
-#: Where the web client picks the meshes up.
+#: Where the web client will pick the meshes up. Nothing loads from here yet --
+#: the sandbox still draws procedural geometry -- but the path is fixed so the
+#: generators and the client agree in advance.
 WEB_ART_ROOT = Path("web/public/art")
 
-#: Subfolder per asset family, so the Unity importer can apply different
-#: settings per family without matching on names.
+#: Subfolder per asset family, so loaders can apply different handling per
+#: family without matching on names.
 CATEGORY_FOLDERS = {
     "build": "Build",
     "weapon": "Weapons",
@@ -81,7 +83,7 @@ def check_before_export(mesh: MeshData) -> list[str]:
     """Problems that should stop an asset being exported.
 
     Catching these here means a broken mesh fails the build rather than
-    arriving in Unity as an invisible or exploded object.
+    reaching the client as an invisible or exploded object.
     """
     problems = list(mesh.validate())
 

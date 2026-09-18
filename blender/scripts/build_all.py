@@ -64,7 +64,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Generate and validate without writing FBX. Needs no Blender.",
+        help="Generate and validate without writing meshes. Needs no Blender.",
     )
     parser.add_argument(
         "--out",
@@ -111,17 +111,17 @@ def main(argv: list[str]) -> int:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    # Records carry repo-relative paths regardless of where FBX is written.
+    # Records carry repo-relative paths regardless of where meshes are written.
     records = [build_record(mesh) for mesh in meshes.values()]
 
     if not args.dry_run:
-        from tonight.blender_adapter import clear_scene, create_object, export_fbx
+        from tonight.blender_adapter import clear_scene, create_object, export_gltf
 
         for mesh in meshes.values():
             clear_scene()
             obj = create_object(mesh)
             destination = export_path(mesh.name, out_root)
-            export_fbx(obj, destination)
+            export_gltf(obj, destination)
             print(f"[tonight]   exported {destination.name}")
 
     manifest_path = root / "blender" / "exports" / "manifest.json"

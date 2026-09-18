@@ -101,14 +101,14 @@ throttle here would violate the "editing must not be rate-limited" rule in §5.
 input → validate locally → spawn predicted piece THIS FRAME → send command
 ```
 
-The predicted piece is a plain GameObject at build-HP with a `PredictedPiece`
-marker. On server confirmation the marker is cleared and the piece is **adopted**
-— not destroyed and respawned — so there is no visual pop. On rejection it is
-destroyed and materials refunded.
+The predicted piece is an ordinary mesh at build-HP, flagged as predicted. On
+server confirmation the flag is cleared and the piece is **adopted** — not
+removed and re-added — so there is no visual pop. On rejection it is removed and
+materials refunded.
 
-Adoption rather than respawn is the detail that makes prediction invisible, and
-it is the most likely place for a bug to hide. It gets dedicated PlayMode tests
-at M4.
+Adoption rather than re-add is the detail that makes prediction invisible, and it
+is the most likely place for a bug to hide. It gets dedicated browser tests at
+M4.
 
 ## 3. Structural integrity
 
@@ -159,7 +159,7 @@ so ordinary chip damage does not generate a network update per hit.
 ## 5. Editing
 
 A player may edit a piece they own. Edit variants come from
-`BuildPieceBlueprint.EditVariants`, each a 3×3 `GridMask` plus a mesh
+`BuildPieceBlueprint.editVariants`, each a 3×3 `gridMask` plus a mesh
 ([schema reference](../blueprints/schema-reference.md)).
 
 ```
@@ -178,7 +178,7 @@ Rules:
 - Reset-to-default is a single input, because fumbling an edit mid-fight and
   needing to undo it instantly is common.
 
-Adding a new edit shape is a new mask plus a new mesh. **No C# change** — this is
+Adding a new edit shape is a new mask plus a new mesh. **No code change** — this is
 one of the M2 exit criteria.
 
 ## 6. Blueprint surface
@@ -192,7 +192,7 @@ Adding a half-wall, a new material, or a new edit shape is asset work.
 
 ## 7. Networking
 
-Build pieces do **not** replicate as NetworkObjects. The wire record is:
+Build pieces do **not** replicate as ordinary entities. The wire record is:
 
 ```
 byte 0-1  cellX       int16
@@ -206,8 +206,9 @@ byte 8    materialId  uint8
 
 Slot has six values and health is quantised to sixteen levels, so the two share
 one byte. Listing them as separate `uint8` fields would come to **ten** bytes,
-and the bandwidth budget in §6 assumes nine — `StructureRecordTests` asserts
-the size so the two cannot drift apart.
+and the bandwidth budget in §6 assumes nine. Nothing asserts this yet: the
+packing is specified but not implemented, and the test that pins the size lands
+with the channel in M4.
 
 Deltas are sent against a per-client acked structure version. Joining and
 reconnecting clients receive a chunked full snapshot. See
@@ -217,17 +218,17 @@ reconnecting clients receive a chunked full snapshot. See
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| Grid quantisation round-trip | EditMode | `cell(world(cell)) == cell` across the full map range, including negatives |
-| Slot occupancy | EditMode | One piece per `(cell, slot)`; ramp replaces cone |
-| Cost and refund | EditMode | Rejection refunds exactly the amount deducted |
-| Support flood-fill | EditMode | Removing a base collapses everything above, nothing beside |
-| Cascade budget | PlayMode | A 500-piece tower collapse stays within the per-tick budget |
-| HP ramp | EditMode | `hp(0) == BuildHealth`, `hp(BuildTime) == FullHealth`, monotonic between |
-| Edit mask matching | EditMode | Each authored mask resolves to its variant; unknown masks revert |
-| Box build time | PlayMode | Scripted 1×1 box completes in < 0.7 s of input |
-| Prediction adoption | PlayMode (M4) | Confirmed piece is adopted, never respawned; no transform discontinuity |
-| Rejection rollback | PlayMode (M4) | Rejected piece disappears and materials return |
-| **No-code content test** | Manual, M2 gate | A new piece type added via one Blueprint + one mesh, zero C# diff |
+| Grid quantisation round-trip | Unit | `cell(world(cell)) == cell` across the full map range, including negatives |
+| Slot occupancy | Unit | One piece per `(cell, slot)`; ramp replaces cone |
+| Cost and refund | Unit | Rejection refunds exactly the amount deducted |
+| Support flood-fill | Unit | Removing a base collapses everything above, nothing beside |
+| Cascade budget | Browser | A 500-piece tower collapse stays within the per-tick budget |
+| HP ramp | Unit | `hp(0) == BuildHealth`, `hp(BuildTime) == FullHealth`, monotonic between |
+| Edit mask matching | Unit | Each authored mask resolves to its variant; unknown masks revert |
+| Box build time | Browser | Scripted 1×1 box completes in < 0.7 s of input |
+| Prediction adoption | Integration (M4) | Confirmed piece is adopted, never respawned; no transform discontinuity |
+| Rejection rollback | Integration (M4) | Rejected piece disappears and materials return |
+| **No-code content test** | Manual, M2 gate | A new piece type added via one Blueprint + one mesh, zero `.ts` diff |
 
 ## 9. Open questions
 

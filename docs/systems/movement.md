@@ -44,8 +44,8 @@ Per tick:
 1. Desired horizontal velocity = moveInput * speedFor(flags)
 2. Accelerate toward it; in air scale the change by AirControl
 3. Apply gravity, clamped to TerminalVelocity
-4. Jump: if grounded and Jump flag, v.y = sqrt(2 * |Gravity| * JumpHeight)
-5. Sweep the capsule, resolving collisions (Unity CharacterController)
+4. Jump: if grounded and Jump flag, v.y = jumpVelocityForTick(blueprint, dt)
+5. Sweep the capsule, resolving collisions (WorldCollision, separated-axis)
 6. Ground check: sphere cast down, 0.1 m tolerance
 7. On landing, apply fall damage from peak height
 8. Mantle check (§4)
@@ -59,12 +59,12 @@ reconciliation replay exact.
 
 ```
 grounded-or-falling, moving forward, obstacle ahead within 0.6 m,
-obstacle top between 0.3 m and MantleMaxHeight, clear space above it
+obstacle top between 0.3 m and mantleMaxHeight, clear space above it
   → lock movement for MantleSeconds, interpolate to the ledge
 ```
 
 Mantle is cancellable by jumping out of it. It cannot be used to climb build
-pieces — a 4 m wall is far above `MantleMaxHeight`, which is exactly the point:
+pieces — a 4 m wall is far above `mantleMaxHeight`, which is exactly the point:
 walls are cover, and beating a wall means building over it or shooting it.
 
 ## 5. Fall damage
@@ -101,13 +101,13 @@ so a future mode with different movement is a Blueprint swap.
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| Blueprint application | EditMode | Every field reaches the controller; no hardcoded constant |
-| Jump apex | PlayMode | Apex within 1 cm of `JumpHeight` |
-| Terminal velocity | PlayMode | Never exceeded in a long fall |
-| Fall damage | EditMode | Zero at threshold; linear above; ignores shield |
-| Fall reset on build | PlayMode | Landing on a placed ramp cancels accumulated fall |
-| Mantle bounds | PlayMode | Mantles at 1.5 m, refuses at 1.7 m, never climbs a 4 m wall |
-| Determinism | EditMode | Same command sequence ⇒ bit-identical end state, 1000 ticks |
-| Slope limit | PlayMode | Walkable to 40°, slides above |
+| Blueprint application | Unit | Every field reaches the controller; no hardcoded constant |
+| Jump apex | Unit | Apex within 1 cm of `jumpHeight`, at every tick rate |
+| Terminal velocity | Browser | Never exceeded in a long fall |
+| Fall damage | Unit | Zero at threshold; linear above; ignores shield |
+| Fall reset on build | Browser | Landing on a placed ramp cancels accumulated fall |
+| Mantle bounds | Browser | Mantles at 1.5 m, refuses at 1.7 m, never climbs a 4 m wall |
+| Determinism | Unit | Same command sequence ⇒ bit-identical end state, 1000 ticks |
+| Slope limit | Browser | Walkable to 40°, slides above |
 
 The determinism test is the one that protects M4. It runs from M1.

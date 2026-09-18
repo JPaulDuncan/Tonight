@@ -1,6 +1,6 @@
 # Content pipeline
 
-How art gets from a Python function into a Unity scene.
+How art gets from a Python function into the browser.
 
 ```
  blender/lib/tonight/          pure Python, no bpy, unit-tested in CI
@@ -12,22 +12,22 @@ How art gets from a Python function into a Unity scene.
                                 │
                                 ▼
         tonight.blender_adapter (the ONLY module importing bpy)
-                                │  Z-up ──► Y-up, metric scale
+                                │  Z-up ──► Y-up (glTF), metric scale
                                 ▼
-                    blender/exports/<Category>/SM_*.fbx     (gitignored)
+                    blender/exports/<Category>/SM_*.glb     (gitignored)
                     blender/exports/manifest.json           (committed)
                                 │
                                 ▼
-            unity/Tonight/Assets/Tonight/Art/<Category>/
+                    web/public/art/<Category>/
                                 │
                                 ▼
-                   Prefab  ──►  Blueprint asset  ──►  in the game
+                 Loaded by render  ──►  referenced by JSON  ──►  in the game
 ```
 
 ## The three rules
 
 **1. The Python is the source of truth, not the `.blend`.**
-`.blend` files are not committed. Nor is exported FBX. Both are output, and the
+`.blend` files are not committed. Nor are exported `.glb` files. Both are output, and the
 generator is the asset ([ADR-0004](../adr/0004-procedural-art-pipeline.md)).
 
 **2. The library must import without `bpy`.**
@@ -36,10 +36,11 @@ and is tested on every push with no Blender install. Only
 `tonight.blender_adapter` imports `bpy`, and it raises a clear error when called
 outside Blender rather than failing somewhere deeper.
 
-**3. Export goes through `tonight.export.export_fbx()`.**
-Never `bpy.ops.export_scene.fbx` directly. That function owns the
-Blender-Z-up → Unity-Y-up conversion and the metric scale. Getting the axis
-wrong looks fine in the viewport and surfaces much later as rotated props.
+**3. Export goes through `tonight.export`.**
+Never `bpy.ops.export_scene.*` directly. glTF is Y-up right-handed and three.js
+loads it natively, so there is a single axis change and no handedness flip —
+simpler than the old Unity target, but still the kind of setting that looks fine
+in the viewport and surfaces much later as rotated props.
 
 ## Running it
 
@@ -63,7 +64,7 @@ Useful flags:
 | --- | --- |
 | `--dry-run` | Generate, validate, and write the manifest without touching Blender |
 | `--only build` | One family. Repeatable: `--only build --only weapon` |
-| `--out <dir>` | Write FBX somewhere other than `blender/exports` |
+| `--out <dir>` | Write meshes somewhere other than `blender/exports` |
 
 ## What the pre-export checks catch
 
@@ -76,7 +77,7 @@ Useful flags:
 | Largest extent ≤ 500 m | Almost always a metres/centimetres mix-up, the single most common pipeline error |
 | Name parses as `PREFIX_Category_Name` | A miscategorised asset lands in the wrong folder with the wrong import settings, and nobody notices until it renders wrong |
 
-These fail the build rather than warning. A broken mesh reaching Unity costs far
+These fail the build rather than warning. A broken mesh reaching the client costs far
 more time to diagnose there than here.
 
 ## Adding a new asset family

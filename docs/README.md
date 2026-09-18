@@ -14,8 +14,8 @@ Read in this order if you are new.
 
 | Doc | Purpose |
 | --- | --- |
-| [02-technical-architecture.md](02-technical-architecture.md) | Engine choice, assembly graph, netcode model, data flow. |
-| [blueprints/README.md](blueprints/README.md) | **The Blueprint authoring contract.** Read before writing any gameplay C#. |
+| [02-technical-architecture.md](02-technical-architecture.md) | Engine choice, module graph, netcode model, data flow. |
+| [blueprints/README.md](blueprints/README.md) | **The Blueprint authoring contract.** Read before writing any gameplay code. |
 | [blueprints/schema-reference.md](blueprints/schema-reference.md) | Every Blueprint type, field by field. |
 | [adr/](adr/) | Architecture Decision Records — why things are the way they are. |
 
@@ -40,7 +40,7 @@ surface, the server-authoritative rules, and the test plan.
 
 | Doc | Purpose |
 | --- | --- |
-| [pipeline/README.md](pipeline/README.md) | How art gets from a Python generator into a Unity scene. |
+| [pipeline/README.md](pipeline/README.md) | How art gets from a Python generator into the browser. |
 | [pipeline/units-and-naming.md](pipeline/units-and-naming.md) | Metric scale, axis conventions, asset prefixes. |
 | [pipeline/blender-generators.md](pipeline/blender-generators.md) | Writing a new procedural asset generator. |
 
@@ -48,9 +48,8 @@ surface, the server-authoritative rules, and the test plan.
 
 | Doc | Purpose |
 | --- | --- |
-| [mcp/README.md](mcp/README.md) | What the two MCP servers are and how they fit together. |
+| [mcp/README.md](mcp/README.md) | What Blender MCP is for, and the rule that keeps it optional. |
 | [mcp/setup-blender-mcp.md](mcp/setup-blender-mcp.md) | Installing and connecting Blender MCP. |
-| [mcp/setup-unity-mcp.md](mcp/setup-unity-mcp.md) | Installing and connecting Unity MCP. |
 | [mcp/runbooks.md](mcp/runbooks.md) | Step-by-step agent recipes for common tasks. |
 | [mcp/troubleshooting.md](mcp/troubleshooting.md) | When the bridge goes quiet. |
 

@@ -77,7 +77,7 @@ hangs `SKIRT_DEPTH` below zero.
 ### Keep faces wound counter-clockwise from outside
 
 `MeshData.is_manifold_ish()` catches a missing face; it does not catch inverted
-winding. If a mesh renders inside-out in Unity, check the vertex order in the
+winding. If a mesh renders inside-out in the client, check the vertex order in the
 face that is wrong.
 
 ## Testing a generator
@@ -129,7 +129,7 @@ generator — `.blend` files are not committed
 
 | Symptom | Cause |
 | --- | --- |
-| Asset is rotated 90° in Unity | Exported without going through `export_fbx()` |
+| Asset is rotated 90° in the client | Exported without going through `export_gltf()` |
 | Asset is 100× too big | Metres/centimetres mix-up; the pre-export check catches extents over 500 m |
 | Asset floats above the ground | Mesh centred on the origin instead of based at Z = 0 |
 | Asset renders inside-out | Face winding is clockwise from outside |

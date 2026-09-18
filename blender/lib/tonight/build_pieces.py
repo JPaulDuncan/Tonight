@@ -196,9 +196,9 @@ def cone(style: MaterialStyle) -> MeshData:
     return MeshData.join(parts, name=name)
 
 
-#: Mask constants matching ``EditVariant.GridMask`` in the Unity Blueprint
-#: schema. Row-major, top-left first. Kept here so the mesh and the Blueprint
-#: mask cannot drift apart.
+#: Mask constants matching ``editVariants[].gridMask`` in the Blueprint schema
+#: (``web/data/building.json``). Row-major, top-left first. Kept here so the mesh
+#: and the Blueprint mask cannot drift apart.
 MASK_SOLID = (True,) * 9
 MASK_DOORWAY = (True, True, True, True, False, True, True, False, True)
 MASK_WINDOW = (True, True, True, True, False, True, True, True, True)
@@ -208,8 +208,8 @@ def wall_variant(style: MaterialStyle, mask: tuple[bool, ...], variant_name: str
     """A wall built from a 3x3 mask, with the false cells cut away.
 
     This is the generator side of the edit system: adding a new edit shape is a
-    new mask here and a new ``EditVariant`` entry on the Blueprint, with no C#
-    change on either side.
+    new mask here and a new ``editVariants`` entry on the Blueprint, with no
+    code change on either side.
     """
     if len(mask) != 9:
         raise ValueError(f"A wall mask needs exactly 9 entries, got {len(mask)}.")

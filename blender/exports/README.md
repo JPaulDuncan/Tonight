@@ -1,6 +1,6 @@
 # Exports
 
-**This folder is build output. Do not commit FBX files from it.**
+**This folder is build output. Do not commit exported meshes from it.**
 
 Everything here is regenerated from the Python in `blender/scripts/`, which is
 the actual source of truth (ADR-0004):

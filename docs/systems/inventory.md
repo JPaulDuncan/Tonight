@@ -25,7 +25,7 @@ every loot decision into an accounting exercise.
 | Drop | Spawns a pickup with the item's exact state, including current magazine |
 | Swap slots | Free, instant, no animation lock |
 | Equip | Takes `WeaponBlueprint.EquipSeconds`; cancellable by swapping again |
-| Stack | Consumables stack to `ConsumableBlueprint.MaxStack` |
+| Stack | Consumables stack to `ConsumableBlueprint.maxStack` |
 | Auto-pickup | Ammo and materials, and consumables that stack onto a held item |
 
 Equip being cancellable matters: swapping shotgun → AR → shotgun to cancel a
@@ -38,10 +38,10 @@ hold use → channel for UseSeconds
          → CancelOnDamage: taking damage interrupts and refunds nothing
                             (the item is consumed on completion, not on start)
          → on completion: apply HealthRestored / ShieldRestored,
-                          clamped by HealthCap
+                          clamped by healthCap
 ```
 
-`HealthCap` below max is what makes a bandage-vs-medkit decision interesting: a
+`healthCap` below max is what makes a bandage-vs-medkit decision interesting: a
 bandage heals to 75, a medkit to 100 and takes far longer.
 
 Consumption on completion rather than on start means an interrupted heal wastes
@@ -67,20 +67,20 @@ slot state.
 
 | Blueprint | Governs |
 | --- | --- |
-| `ItemBlueprint` (base) | Icon, pickup prefab, stackability |
+| `ItemBlueprintBase` | Icon path, stackability |
 | `WeaponBlueprint` | Equip time, ammo type |
 | `ConsumableBlueprint` | Heal amounts, cap, use time, stack size, cancel rules |
-| `MatchRulesBlueprint` | `StartingLoadout` |
+| `MatchRulesBlueprint` | `startingLoadoutIds` |
 
 ## 7. Test plan
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| Slot assignment | EditMode | Lowest free slot; correct swap when full |
-| State preservation | EditMode | Dropping and re-picking preserves magazine contents exactly |
-| Stacking | EditMode | Respects `MaxStack`; overflow spawns a second stack |
-| Heal cap | EditMode | `HealthCap` respected; never exceeds `MaxHealth` |
-| Interrupt | PlayMode | Damage cancels the channel; the item is not consumed |
-| Equip cancel | PlayMode | Swap during equip cancels cleanly with no stuck state |
-| Death drop | PlayMode | Full inventory, 50% materials, 100% ammo |
-| Authority | PlayMode (M4) | Out-of-range pickup rejected |
+| Slot assignment | Unit | Lowest free slot; correct swap when full |
+| State preservation | Unit | Dropping and re-picking preserves magazine contents exactly |
+| Stacking | Unit | Respects `maxStack`; overflow spawns a second stack |
+| Heal cap | Unit | `healthCap` respected; never exceeds `maxHealth` |
+| Interrupt | Browser | Damage cancels the channel; the item is not consumed |
+| Equip cancel | Browser | Swap during equip cancels cleanly with no stuck state |
+| Death drop | Browser | Full inventory, 50% materials, 100% ammo |
+| Authority | Integration (M4) | Out-of-range pickup rejected |

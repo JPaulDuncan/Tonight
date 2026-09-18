@@ -7,7 +7,7 @@ for why this is not a Unity project any more.
 
 ## The one rule
 
-**Content goes in Blueprints, not C#.**
+**Content goes in Blueprints, not code.**
 
 A "Blueprint" here is an entry in the JSON under `web/data/`. Adding a weapon,
 build piece, loot table entry or storm phase must be doable by editing JSON.
@@ -33,7 +33,6 @@ See `docs/blueprints/README.md` for the full contract.
 | `web/data/` | Blueprint JSON: the content set |
 | `blender/lib/tonight/` | Pure-Python generator library — **must import without `bpy`** |
 | `blender/scripts/` | Blender entry points (`bpy` allowed here only) |
-| `tools/` | Validation + build scripts |
 
 ## Conventions
 
@@ -77,7 +76,7 @@ blender --background --python blender/scripts/build_all.py    # regenerate all a
 ## Things that will bite you
 
 - Blender is Z-up right-handed; three.js is Y-up right-handed. **Export glTF**
-  via `tonight.export.export_gltf()`, which is the format three.js loads
+  via `tonight.blender_adapter.export_gltf()`, which is the format three.js loads
   natively and whose Y-up convention Blender's exporter handles. Do not call
   `bpy.ops.export_scene.*` directly.
 - Unlike the old Unity target, there is no handedness flip in this pipeline.

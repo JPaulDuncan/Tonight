@@ -35,7 +35,7 @@ references itself fails CI rather than hanging the server.
 ### 2.1 Rarity
 
 Rarity is rolled separately from item identity, using `RarityBlueprint.LootWeight`
-shifted by `RarityTableBias`:
+shifted by the table's `rarityBias`:
 
 | Rarity | Weight (floor) | Tier |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ shifted by `RarityTableBias`:
 | Legendary | 1 | 4 |
 
 `RarityBias = 1` (chests) shifts each rolled tier up one, clamped at Legendary.
-`RarityOverride` on an entry forces a tier outright, which is how supply drops
+`rarityOverrideId` on an entry forces a tier outright, which is how supply drops
 guarantee a high roll.
 
 Rarity multiplies damage only (GDD §5.3). A Common AR remains a viable weapon,
@@ -103,14 +103,14 @@ references it.
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| **Distribution** | EditMode | 10⁵ rolls per table land within χ² tolerance of the authored weights |
-| Rarity bias | EditMode | Chest tables measurably shift one tier up; clamped at Legendary |
-| Nesting | EditMode | Nested tables contribute proportionally to their entry weight |
+| **Distribution** | Unit | 10⁵ rolls per table land within χ² tolerance of the authored weights |
+| Rarity bias | Unit | Chest tables measurably shift one tier up; clamped at Legendary |
+| Nesting | Unit | Nested tables contribute proportionally to their entry weight |
 | Cycle detection | Validation | A self-referencing table fails CI |
-| No duplicates | EditMode | `AllowDuplicates = false` never emits two of one id |
-| Determinism | EditMode | Same match seed ⇒ identical spawns across the whole map |
-| Pickup authority | PlayMode (M4) | An out-of-range pickup is rejected |
-| Zero-weight | EditMode | A table whose weights sum to zero fails validation rather than dividing by zero |
+| No duplicates | Unit | `AllowDuplicates = false` never emits two of one id |
+| Determinism | Unit | Same match seed ⇒ identical spawns across the whole map |
+| Pickup authority | Integration (M4) | An out-of-range pickup is rejected |
+| Zero-weight | Unit | A table whose weights sum to zero fails validation rather than dividing by zero |
 
 The distribution test is statistical rather than example-based on purpose: a
 weighted table that is subtly wrong still produces individually plausible rolls,

@@ -12,7 +12,8 @@ The anchor is **a full tree in about seven seconds**, yielding 150–270 wood �
 mid-fight while keeping materials from feeling scarce in the early game.
 
 Everything in GDD §2.1's loop-timing table is derived from the rates below
-rather than set independently, and `HarvestAndWalletTests` re-derives them so
+rather than set independently, and the `harvesting` suite in
+`web/tests/systems.test.ts` re-derives them so
 the numbers and the prose cannot drift apart. An earlier draft asserted a
 "30 material wall in 4.5 s", which contradicted both the 10-material piece cost
 in GDD §4.3 and these rates by a factor of five.
@@ -69,18 +70,18 @@ Harvestable HP replicates quantised, as with structures.
 
 ## 6. Blueprint surface
 
-`HarvestableBlueprint` — material, HP, yields, prefab, VFX, respawn. Adding a new
-harvestable prop is an asset plus a mesh.
+`HarvestableBlueprint` — material, HP, yields, respawn. Adding a new harvestable
+prop is a JSON entry plus a mesh.
 
-`RespawnSeconds` defaults to −1 (never). It exists for the practice range, where
-infinite materials are wanted.
+`respawnSeconds` is −1 (never) for everything in the shipped set. It exists for
+the practice range, where infinite materials are wanted.
 
 ## 7. Test plan
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| Yield totals | EditMode | Fully harvesting each type yields the documented total |
-| Weak-point determinism | EditMode | Same `(objectId, hitCount)` ⇒ same marker position |
-| Cap | EditMode | Yield stops at `MaxCarried`; damage still applies |
-| Wall-time target | PlayMode | 30 wood in ≤ 4.5 s with consistent weak-point hits |
-| Prediction correction | PlayMode (M4) | A rejected harvest corrects the count without desyncing the object |
+| Yield totals | Unit | Fully harvesting each type yields the documented total |
+| Weak-point determinism | Unit | Same `(objectId, hitCount)` ⇒ same marker position |
+| Cap | Unit | Yield stops at `maxCarried`; damage still applies |
+| Wall-time target | Browser | 30 wood in ≤ 4.5 s with consistent weak-point hits |
+| Prediction correction | Integration (M4) | A rejected harvest corrects the count without desyncing the object |

@@ -6,6 +6,13 @@ The highest-risk system in the project. See
 [ADR-0002](../adr/0002-netcode-stack.md) and
 [ADR-0003](../adr/0003-defer-networking-to-m4.md).
 
+ADR-0002's *shape* — dedicated server, server authority, 30 Hz tick, prediction
+on movement and building, a bespoke structure channel — survives the move to
+three.js unchanged. Its named libraries do not: Unity Transport and Netcode for
+GameObjects are replaced by a browser transport and a hand-written snapshot
+channel, per [ADR-0007](../adr/0007-threejs-instead-of-unity.md). The table below is the
+current stack; ADR-0002 records the superseded one.
+
 ## 1. Model
 
 | Aspect | Decision |
@@ -14,8 +21,8 @@ The highest-risk system in the project. See
 | Authority | Server owns all simulation |
 | Simulation tick | 30 Hz fixed |
 | Snapshot send | 20 Hz |
-| Transport | Unity Transport (UDP, unreliable + reliable channels) |
-| Replication | Netcode for GameObjects, plus a custom structure channel |
+| Transport | WebSocket, with WebRTC data channels if latency demands it |
+| Replication | Custom snapshot + delta, plus a custom structure channel |
 | Prediction | Movement, build placement |
 | Lag compensation | Server rewind, 250 ms cap |
 
@@ -70,14 +77,14 @@ exactly.
 
 ## 4. Replication channels
 
-### 4.1 Standard NGO objects
+### 4.1 Standard replicated entities
 
-Players, projectiles, loot piles, chests, the storm. Server-authoritative
-NetworkObjects with interest management.
+Players, projectiles, loot piles, chests, the storm. Server-authoritative, sent
+as snapshot deltas with interest management.
 
 ### 4.2 The structure channel
 
-Build pieces would be catastrophic as NetworkObjects — thousands of them, never
+Build pieces would be catastrophic as ordinary entities — thousands of them, never
 moving, fully described by an integer cell.
 
 ```
@@ -92,20 +99,21 @@ byte 8    materialId  uint8
 
 Slot has six values and health is quantised to sixteen levels, so the two share
 one byte. Listing them as separate `uint8` fields would come to **ten** bytes,
-and the bandwidth budget in §6 assumes nine — `StructureRecordTests` asserts
-the size so the two cannot drift apart.
+and the bandwidth budget in §6 assumes nine. Nothing asserts this yet: the
+packing is specified here but not implemented, and the test that pins the size
+lands with the channel in M4.
 
 - The server keeps a monotonically increasing `structureVersion`.
 - Each client acks the version it has.
 - The server sends the delta between acked and current, filtered by interest.
-- Clients instantiate plain, non-networked GameObjects from records.
+- Clients instantiate plain, non-replicated meshes from records.
 - HP is quantised to 16 buckets, so chip damage does not generate traffic.
 - Joining or reconnecting clients get a chunked full snapshot, rate-limited so
   it never stalls the connection.
 
-Because these are not NetworkObjects, NGO's tooling cannot see them. A custom
-inspector and structure-channel logging are part of the M4 deliverable, not an
-afterthought — debugging this channel without them would be miserable.
+Because this channel is bespoke, no off-the-shelf tooling can see into it. A
+debug overlay and structure-channel logging are part of the M4 deliverable, not
+an afterthought — debugging this channel without them would be miserable.
 
 ## 5. Interest management
 
@@ -178,7 +186,7 @@ cheater.
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| Reconciliation determinism | PlayMode | Replaying identical commands reproduces state bit-exactly |
+| Reconciliation determinism | Browser | Replaying identical commands reproduces state bit-exactly |
 | Packet loss | Integration | 5% loss produces no visible correction; 20% recovers within 500 ms |
 | Latency sweep | Integration | 20/60/120/250 ms all playable; hits register correctly at each |
 | Rewind bound | Integration | A 400 ms-late shot compensates exactly 250 ms |
@@ -194,5 +202,5 @@ The two gate tests are the M4 exit criteria. They are measured, not estimated.
 | Question | Owner | Decide by |
 | --- | --- | --- |
 | Snapshot interpolation delay: fixed 100 ms or adaptive? | engineering | M4 |
-| Does the structure channel need its own reliability layer, or is NGO's enough? | engineering | M4 |
+| Does the structure channel need its own reliability layer, or is the transport's enough? | engineering | M4 |
 | Server tick 30 Hz — is 20 Hz enough, buying headroom for the cascade? | engineering | M4 |

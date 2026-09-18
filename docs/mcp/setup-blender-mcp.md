@@ -106,6 +106,5 @@ and MCP does not, the problem is the bridge, not the pipeline.
 
 ## Next
 
-- [setup-unity-mcp.md](setup-unity-mcp.md)
 - [runbooks.md](runbooks.md)
 - [troubleshooting.md](troubleshooting.md)

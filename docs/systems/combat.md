@@ -25,7 +25,7 @@ damage = profile.BaseDamage
        * rarity.DamageMultiplier
        * (hitbox.IsHead ? profile.HeadshotMultiplier : hitbox.DamageScale)
        * falloff(distance)
-       * (target.IsStructure ? profile.StructureMultiplier : 1)
+       * (target.isStructure ? profile.structureMultiplier : 1)
 
 falloff(d) = 1                            when d <= FalloffStartMetres
            = lerp(1, FalloffEndDamageScale,
@@ -41,14 +41,14 @@ It never means adding a branch.
 
 ### 3.1 Fire modes
 
-`Auto`, `Semi`, `Burst`, `BoltAction` — all driven from `WeaponBlueprint.FireMode`.
+`auto`, `semi`, `burst`, `boltAction` — all driven from `WeaponBlueprint.fireMode`.
 The shot scheduler is one generic state machine:
 
 ```
 interval = 60 / FireRateRpm
 on trigger: if (now - lastShot >= interval && ammo > 0) Shoot()
 Burst:      fires BurstCount shots at interval, then requires a re-press
-BoltAction: forced cycle time after each shot, cancellable into a weapon swap
+boltAction: forced cycle time after each shot, cancellable into a weapon swap
 ```
 
 Bolt-action cycling being swap-cancellable is a deliberate skill expression:
@@ -57,13 +57,13 @@ sniper-then-shotgun is a legitimate combo.
 ### 3.2 Spread and bloom
 
 ```
-effectiveSpread = SpreadDegrees + currentBloom
+effectiveSpread = spreadDegrees + currentBloom
 currentBloom   += BloomPerShot per shot, capped at BloomMaxDegrees
 currentBloom   -= BloomRecoveryPerSecond * dt while not firing
 FirstShotAccurate: when currentBloom == 0, the shot is dead centre
 ```
 
-Shotguns express through `PelletCount > 1` plus a wide `SpreadDegrees`. There is
+Shotguns express through `pelletCount > 1` plus a wide `spreadDegrees`. There is
 no shotgun code path — pellet count is a loop bound.
 
 Pellet directions are drawn from a **seeded, shot-indexed** RNG shared by client
@@ -106,7 +106,7 @@ per player.
 
 ### 4.2 Projectiles
 
-`IsProjectile` weapons (sniper) simulate server-side with gravity
+`isProjectile` weapons (sniper) simulate server-side with gravity
 `Gravity * ProjectileGravityScale`. The client simulates a **visual-only** tracer
 using identical parameters so the two agree closely; the server's result is
 authoritative and the client's tracer is never used for hit resolution.
@@ -114,7 +114,7 @@ authoritative and the client's tracer is never used for hit resolution.
 ### 4.3 Structure hits
 
 Bullets hit build pieces on the `Structure` layer. Structure damage applies
-`StructureMultiplier` (GDD §5.5) and bypasses hitbox scaling entirely. A bullet
+`structureMultiplier` (GDD §5.5) and bypasses hitbox scaling entirely. A bullet
 that hits a structure **stops** — no penetration in the M3 set.
 
 ## 5. Feedback
@@ -159,16 +159,16 @@ last living squad member eliminated → all DBNO squadmates eliminated
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| Damage formula | EditMode | Table-driven across class × rarity × hitbox × distance |
-| Falloff boundaries | EditMode | Exact values at start, end, and beyond; monotonic between |
-| Shield ordering | EditMode | Shield absorbs first; penetration splits correctly; no negative pools |
-| Bloom | EditMode | Accumulates to cap, recovers to zero, first shot accurate at rest |
-| Pellet determinism | EditMode | Same seed and shot index ⇒ identical pellet directions |
-| Fire scheduling | EditMode | Rate honoured for each mode; burst requires re-press |
-| Lag compensation | PlayMode (M4) | A hit on a rewound position registers; a 300 ms-late shot compensates only 250 ms |
-| Structure multiplier | EditMode | SMG out-damages AR against structures, under-damages against players |
-| DBNO | PlayMode (M5) | Bleed, revive, last-member wipe |
-| **No-code content test** | Manual, M3 gate | A new weapon added via one Blueprint + one mesh, zero C# diff |
+| Damage formula | Unit | Table-driven across class × rarity × hitbox × distance |
+| Falloff boundaries | Unit | Exact values at start, end, and beyond; monotonic between |
+| Shield ordering | Unit | Shield absorbs first; penetration splits correctly; no negative pools |
+| Bloom | Unit | Accumulates to cap, recovers to zero, first shot accurate at rest |
+| Pellet determinism | Unit | Same seed and shot index ⇒ identical pellet directions |
+| Fire scheduling | Unit | Rate honoured for each mode; burst requires re-press |
+| Lag compensation | Integration (M4) | A hit on a rewound position registers; a 300 ms-late shot compensates only 250 ms |
+| Structure multiplier | Unit | SMG out-damages AR against structures, under-damages against players |
+| DBNO | Integration (M5) | Bleed, revive, last-member wipe |
+| **No-code content test** | Manual, M3 gate | A new weapon added via one Blueprint + one mesh, zero `.ts` diff |
 
 ## 9. Open questions
 

@@ -6,7 +6,7 @@ right in Blender and wrong in the engine. Every constant here lives in
 
 ## Scale
 
-**One Unity unit is one metre.** Blender authors in metres and exports at scale
+**One world unit is one metre.** Blender authors in metres and exports at scale
 1.0, so there is no conversion factor anywhere — a conversion factor is a thing
 to forget.
 
@@ -27,16 +27,22 @@ number someone typed.
 | | Up | Forward | Handedness |
 | --- | --- | --- | --- |
 | Blender | +Z | −Y | Right |
-| Unity | +Y | +Z | Left |
+| glTF / three.js | +Y | −Z | Right |
 
-Export uses `axis_forward="-Z"`, `axis_up="Y"`, applied once, in
-`tonight.export.export_fbx()`. **Do not call `bpy.ops.export_scene.fbx`
-directly.**
+Both are right-handed, so the export is a single axis change with no handedness
+flip: `export_yup=True`, applied once, in
+`tonight.blender_adapter.export_gltf()`. **Do not call
+`bpy.ops.export_scene.gltf` directly.**
+
+(The Unity target this pipeline was built for was Y-up *left*-handed, which made
+this fiddlier. It is easier now, and the rule is unchanged — the setting still
+lives in exactly one place, because it is the kind of mistake that looks fine in
+the viewport and only surfaces later as rotated props.)
 
 Two conventions that follow from this, and that generators must respect:
 
 - **Weapons are built along +X.** After the conversion they point down the
-  character's forward axis with no per-asset rotation baked into the prefab.
+  character's forward axis with no per-asset rotation baked into the mesh.
 - **Props sit with their base at Z = 0.** A prop whose origin is not at its base
   floats or sinks when placed. `test_props_sit_on_the_ground_plane` checks this.
 
@@ -56,8 +62,6 @@ makes the convention unparseable back into its pieces.
 | `SK_` | Skeletal mesh |
 | `M_` | Material |
 | `T_` | Texture |
-| `PF_` | Prefab |
-| `BP_` | Blueprint asset |
 
 | Category | Export folder |
 | --- | --- |

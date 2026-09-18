@@ -85,10 +85,10 @@ Solo, Duos, and Squads are **three assets**, not three code paths.
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| State machine | EditMode | Every legal transition; illegal ones rejected |
+| State machine | Unit | Every legal transition; illegal ones rejected |
 | Lobby timeout | Integration | Starts at 90 s with a partial lobby |
 | Seed reproducibility | Integration | Same seed ⇒ same bus path and loot spawns |
-| Forced ejection | PlayMode | Every remaining player ejects at path end |
-| Squad elimination | PlayMode (M5) | Last member's death eliminates DBNO squadmates |
+| Forced ejection | Browser | Every remaining player ejects at path end |
+| Squad elimination | Integration (M5) | Last member's death eliminates DBNO squadmates |
 | Reconnect | Integration | Within 90 s restores control and world state; after 90 s does not |
 | Full match | Integration, M5 gate | 18 minutes end to end, no desync, no server error |

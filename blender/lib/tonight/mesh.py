@@ -6,7 +6,7 @@ the geometry logic -- the part with the actual bugs in it -- be unit-tested in
 CI with no Blender install.
 
 Coordinates are in Blender's convention: **Z-up, metres**. The conversion to
-Unity's Y-up happens once, at export.
+glTF's Y-up happens once, at export.
 """
 
 from __future__ import annotations

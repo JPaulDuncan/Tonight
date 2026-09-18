@@ -7,19 +7,19 @@ the game's visual identity. See [vision](../00-vision.md) pillar 2.
 
 ## 1. Phases
 
-Eight phases from `StormPhaseBlueprint` assets, ordered by `PhaseIndex`. Shipped
-defaults are in GDD §7; they total **16:40**, which is the figure the match-length
-check in `tools/validate_blueprints.py` re-derives rather than trusts.
+Seven phases, ordered by `phaseIndex`. Shipped defaults are in GDD §7 and in
+`web/data/match.json`; they total **11:30**, which the match-length check in
+`web/tests/blueprints.test.ts` re-derives rather than trusts.
 
 Each phase runs:
 
 ```
 WAIT (WaitSeconds)   next circle announced and drawn on the map; storm stationary
-CLOSE (CloseSeconds) radius lerps StartRadius → EndRadius toward the new centre
+CLOSE (closeSeconds) radius lerps startRadius → endRadius toward the new centre
 ```
 
 Damage is applied to any player outside the current boundary at
-`DamagePerSecond`, ticked every second, ignoring shield. Storm damage is a clock,
+`damagePerSecond`, ticked every second, ignoring shield. Storm damage is a clock,
 not a combat interaction; letting shields absorb it would blunt the pacing.
 
 ## 2. Circle placement
@@ -29,7 +29,7 @@ players' centroid:
 
 ```
 centroid   = mean position of living players
-candidate  = lerp(randomPointInCircle(current), centroid, CentreBiasToPlayers)
+candidate  = lerp(randomPointInCircle(current), centroid, centreBiasToPlayers)
 nextCentre = clampIntoCircle(candidate, current, nextRadius)
 ```
 
@@ -70,7 +70,8 @@ Storm phase drives time of day via `MatchLightingBlueprint`. GDD §1.2.
 Lighting interpolates continuously across phase progress, never snapping.
 
 **The hard constraint:** ambient light level never affects gameplay. There is no
-stealth-in-darkness mechanic, and `MinPlayerRimIntensity` (default 0.4) puts a
+stealth-in-darkness mechanic, and `minPlayerRimIntensity` (0.4 in the shipped
+set) puts a
 floor under character visibility at every phase. This is enforced by a test, not
 by intention — see §6.
 
@@ -98,19 +99,19 @@ whoever has the better monitor.
 | `MatchRulesBlueprint` | The ordered phase list |
 
 Retuning the whole storm — a faster mode, a slower one — is editing assets.
-Adding a ninth phase is adding an asset.
+Adding an eighth phase is adding a JSON entry.
 
 ## 6. Test plan
 
 | Test | Level | Asserts |
 | --- | --- | --- |
-| Phase continuity | EditMode | Each phase's `StartRadius` equals the previous `EndRadius` — no silent jumps |
-| Radius curve | EditMode | Monotonic decreasing; exact at wait start and close end |
-| Damage tick | PlayMode | DPS matches; ignores shield; stops on re-entry |
-| Rotation clamp | EditMode | Randomised survivor spreads; no player exceeds `maxDist` unless the spread is geometrically impossible |
-| Clamp failure logging | EditMode | The impossible case is detected and reported, not silently accepted |
-| Lighting continuity | PlayMode | No discontinuity in sun elevation or fog across a phase boundary |
-| **Visibility floor** | PlayMode | A character silhouette at 150 m stays above a measured luminance-contrast threshold in every phase, including deep night |
+| Phase continuity | Unit | Each phase's `startRadius` equals the previous `endRadius` — no silent jumps |
+| Radius curve | Unit | Monotonic decreasing; exact at wait start and close end |
+| Damage tick | Browser | DPS matches; ignores shield; stops on re-entry |
+| Rotation clamp | Unit | Randomised survivor spreads; no player exceeds `maxDist` unless the spread is geometrically impossible |
+| Clamp failure logging | Unit | The impossible case is detected and reported, not silently accepted |
+| Lighting continuity | Browser | No discontinuity in sun elevation or fog across a phase boundary |
+| **Visibility floor** | Browser | A character silhouette at 150 m stays above a measured luminance-contrast threshold in every phase, including deep night |
 | Total match length | Integration | Sum of phases lands in the 16–18 minute window |
 
 The visibility test is the one that keeps pillar 2 honest. It measures rendered
@@ -120,5 +121,5 @@ contrast rather than trusting the art.
 
 | Question | Owner | Decide by |
 | --- | --- | --- |
-| Should `CentreBiasToPlayers` scale up in late phases to force fights? | design | M4 |
+| Should `centreBiasToPlayers` scale up in late phases to force fights? | design | M4 |
 | Does storm damage break healing, or only interrupt it? | design | M4 |

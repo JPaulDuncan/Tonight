@@ -18,22 +18,28 @@ defaults; tuning happens in the Editor.
 
 | Phase | Duration | What happens |
 | --- | --- | --- |
-| Lobby | until 100 players or 90 s timeout | Players join, load, idle in a pre-match island |
-| Bus | 45 s | Transport crosses the map on a random chord; players eject at will |
-| Freefall | ~12 s | Dive control, glider auto-deploys at 35 m above ground |
-| Early game | 0:00–4:45 | Storm 0 covers most of the map. Looting phase. |
-| Mid game | 4:45–12:05 | Storm phases 1–3. Rotations and fights. |
-| End game | 12:05–16:40 | Storm phases 4–7. Small circles, heavy building. |
+| Lobby | until 30 players or 90 s timeout | Players join, load, idle in a pre-match island |
+| Bus | 30 s | Transport crosses the map on a random chord; players eject at will |
+| Freefall | ~10 s | Dive control, glider auto-deploys at 35 m above ground |
+| Early game | 0:00–3:30 | Storm 0 covers the map. Looting phase. |
+| Mid game | 3:30–7:30 | Storm phases 1–2. Rotations and fights. |
+| End game | 7:30–11:30 | Storm phases 3–6. Small circles, heavy building. |
 | Victory | — | Last player standing |
 
 The match clock starts when the first player lands. The storm schedule in §7
-totals **16:40**, so a full match runs about **17:40** door to door including
-the bus and freefall. Matches longer than 22 minutes are a tuning bug, not a
-design outcome.
+totals **11:30**, so a full match runs about **12:10** door to door including
+the bus and freefall.
+
+**The game targets 30 players, not 100.** That is a consequence of running in a
+browser: WebGL rendering of many players plus thousands of build pieces is the
+project's top technical risk ([ADR-0007](adr/0007-threejs-instead-of-unity.md)),
+and a smaller lobby on a smaller map keeps the build-fight loop intact while
+that risk is worked down. A shorter match follows from a smaller lobby — the
+same number of fights happens in less time.
 
 These numbers are the sum of the §7 table, not an aspiration written beside it —
-`tools/validate_blueprints.py` re-adds them in CI and warns if the shipped storm
-assets drift outside the 12–22 minute band.
+`web/tests/blueprints.test.ts` re-adds them in CI and warns if the shipped storm
+data drifts outside the design band.
 
 ### 1.2 The night clock
 
@@ -42,11 +48,17 @@ Storm phase drives time-of-day. This is the game's identity mechanic.
 | Storm phase | Sky state | Sun elevation |
 | --- | --- | --- |
 | 0 | Dusk | +8° |
-| 1–2 | Blue hour | −4° |
-| 3–4 | Deep night | −22° |
-| 5 | False dawn | −10° |
-| 6 | Dawn | +2° |
-| 7 | Sunrise | +12° |
+| 1 | Blue hour | −4° |
+| 2 | Nightfall | −14° |
+| 3 | Deep night | −22° |
+| 4 | False dawn | −10° |
+| 5 | Dawn | +2° |
+| 6 | Sunrise | +12° |
+
+Seven phases rather than eight, so the arc still runs dusk to sunrise across a
+shorter match. `lighting.nightfall` in `web/data/match.json` carries these, and
+validation requires a keyframe for every storm phase — a missing one would stall
+the night clock partway.
 
 Ambient light level **never affects gameplay**. Player and structure visibility
 is maintained by rim lighting and emissive trim on characters at all phases —
@@ -54,14 +66,18 @@ verified by the visibility test in `docs/systems/storm.md`.
 
 ### 1.3 Modes
 
-| Mode | Squad size | Ships in |
-| --- | --- | --- |
-| Solo | 1 | M4 |
-| Duos | 2 | M5 |
-| Squads | 4 | M5 |
-| Practice range | 1 | M2 |
+| Mode | Squad size | Lobby | Ships in |
+| --- | --- | --- | --- |
+| Solo | 1 | 30 | M4 |
+| Duos | 2 | 30 (15 teams) | M5 |
+| Trios | 3 | 30 (10 teams) | M5 |
+| Practice range | 1 | — | M2 |
 
-Squad modes add downed-but-not-out (DBNO) and revives. DBNO is specified in
+Squads are **three**, not four: 30 does not divide by 4, and one lobby size
+across every mode matters for matchmaking at this scale. Validation enforces
+`maxPlayers % squadSize === 0`, so this cannot silently drift.
+
+Duos and Trios add downed-but-not-out (DBNO) and revives. DBNO is specified in
 [systems/combat.md](systems/combat.md) and is a Blueprint toggle
 (`MatchRulesBlueprint.allowDbno`), not a code branch.
 
@@ -99,7 +115,8 @@ The harvest rows are **derived** from the rates in
 not set independently — an earlier draft of this table asserted 4.5 s to gather
 "one wall's worth (30)", which contradicted both the 10-material wall cost in
 §4.3 and the documented swing rate by a factor of five.
-`HarvestAndWalletTests` re-derives these, so the two cannot drift apart again.
+The `harvesting` and `material wallet` suites in `web/tests/systems.test.ts`
+re-derive these, so the two cannot drift apart again.
 
 The weak-point bonus is what makes the spread between the two harvest columns
 matter: missing every marker doubles the time to a box.
@@ -279,14 +296,13 @@ Full spec: [systems/storm.md](systems/storm.md).
 
 | Phase | Wait (s) | Close (s) | Radius (m) | DPS | Ends at |
 | --- | --- | --- | --- | --- | --- |
-| 0 | 165 | 120 | 1400 → 900 | 1 | 4:45 |
-| 1 | 90 | 90 | 900 → 600 | 1 | 7:45 |
-| 2 | 75 | 70 | 600 → 400 | 2 | 10:10 |
-| 3 | 60 | 55 | 400 → 250 | 5 | 12:05 |
-| 4 | 45 | 45 | 250 → 150 | 7 | 13:35 |
-| 5 | 35 | 35 | 150 → 80 | 10 | 14:45 |
-| 6 | 30 | 30 | 80 → 30 | 10 | 15:45 |
-| 7 | 20 | 35 | 30 → 0 | 10 | 16:40 |
+| 0 | 120 | 90 | 800 → 520 | 1 | 3:30 |
+| 1 | 70 | 65 | 520 → 340 | 1 | 5:45 |
+| 2 | 55 | 50 | 340 → 210 | 2 | 7:30 |
+| 3 | 40 | 40 | 210 → 120 | 5 | 8:50 |
+| 4 | 30 | 30 | 120 → 60 | 7 | 9:50 |
+| 5 | 25 | 25 | 60 → 25 | 10 | 10:40 |
+| 6 | 20 | 30 | 25 → 0 | 10 | 11:30 |
 
 Each phase's start radius equals the previous phase's end radius. A gap there is
 a circle that silently teleports mid-match, so it is a cross-asset validation
@@ -301,19 +317,20 @@ That clamp is the difference between a tense rotation and an unfair death.
 
 ## 8. Map
 
-Working title: **Nightfall Isle**. 1.4 km × 1.4 km island.
+Working title: **Nightfall Isle**. 800 m × 800 m island, scaled from the
+original 1.4 km design along with the player count.
 
 | Zone type | Count | Loot density | Purpose |
 | --- | --- | --- | --- |
-| Major POI (town) | 5 | High | Hot drops, early fights |
-| Minor POI (farm, camp) | 12 | Medium | Safe-ish landings |
-| Landmark (bridge, tower) | 8 | Low | Rotation anchors, sightlines |
+| Major POI (town) | 3 | High | Hot drops, early fights |
+| Minor POI (farm, camp) | 7 | Medium | Safe-ish landings |
+| Landmark (bridge, tower) | 4 | Low | Rotation anchors, sightlines |
 | Open terrain | — | Very low | Build-fight space |
 
 Design constraints:
 
-- No POI is more than 450 m from another — a player who lands badly can reach
-  loot before the first storm close.
+- No POI is more than 260 m from another — a player who lands badly can reach
+  loot before the first storm close. (450 m at the old map size, scaled.)
 - Terrain has no slope above 40° outside of designed cliffs, so building is
   always viable.
 - At least 30% of the map is open terrain. Build-fights need room.
@@ -397,7 +414,7 @@ reachable from a Blueprint field, that is a bug in the implementation.
 
 | GDD section | Blueprint type |
 | --- | --- |
-| 1.1 Match structure | `MatchRulesBlueprint` |
+| 1.1 Match structure | `MatchRulesBlueprint` (`web/data/match.json`) |
 | 1.2 Night clock | `MatchLightingBlueprint` |
 | 3 Movement | `MovementBlueprint` |
 | 4.2–4.4 Building | `BuildPieceBlueprint`, `BuildMaterialBlueprint` |
@@ -407,3 +424,6 @@ reachable from a Blueprint field, that is a bug in the implementation.
 | 8 Map | `PoiBlueprint`, `MapBlueprint` |
 
 Field-by-field detail: [blueprints/schema-reference.md](blueprints/schema-reference.md).
+The shipped values live in `web/data/`, and `web/tests/blueprints.test.ts`
+re-derives the match length, radius continuity and lobby arithmetic above, so
+this document and the game cannot drift apart.

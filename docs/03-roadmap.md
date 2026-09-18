@@ -12,32 +12,26 @@ has no reason to continue.
 
 ## How to read the checkboxes
 
-This repository was built without a Unity licence, a running Editor, or a
-Blender install. That splits every exit criterion into two kinds, and they are
-marked differently throughout:
-
 | Mark | Meaning |
 | --- | --- |
 | `[x]` | **Done and verified.** Something automated checks it and fails if it regresses. |
-| `[~]` | **Implemented, unverified.** The code and assets exist and are covered by tests that have never been executed, because running them needs the Unity Editor. |
+| `[~]` | **Partially done** — working but incomplete, or working only in the sandbox. |
 | `[ ]` | **Not done.** |
 
-`[~]` is the honest answer for most of M1–M5. The simulation layer is written
-and carries 215 EditMode tests, but **no C# in this repository has ever been
-compiled**. Treat the first Unity open as a debugging pass, not a demo.
+Every `[x]` below is checked by `npm run verify`, `npm run smoke`, or
+`pytest blender/tests` on every push. Nothing is marked done on the strength of
+having been written.
 
-What *is* verified is everything reachable without an engine: 136 Python tests
-covering the Blender generator library, terrain and map constraints, and the
-Blueprint validator; plus 57 seed Blueprint assets that the validator checks on
-every push.
+This replaces the earlier Unity-era honesty note, which had to distinguish
+"implemented" from "ever compiled". That distinction is gone: the code runs.
 
-A criterion needing a running game — "frame time under 8 ms", "100 simulated
-clients hold 30 Hz", "playable end to end by real players" — cannot be ticked
-from here at all, and is marked `[ ]` with a note rather than quietly claimed.
+**Rescoped to 30 players** ([ADR-0007](adr/0007-threejs-instead-of-unity.md)).
+The map, storm schedule, POI counts and squad sizes in the GDD all moved with
+it, and the tests re-derive them.
 
 ---
 
-## M0 — Foundation *(this repository, current)*
+## M0 — Foundation
 
 Design and technical specification, project skeleton, art pipeline.
 
@@ -46,11 +40,12 @@ Design and technical specification, project skeleton, art pipeline.
 - [x] Vision, GDD, and technical architecture written and internally consistent.
 - [x] Blueprint authoring contract specified with a full schema reference.
 - [x] One spec per gameplay system.
-- [x] Unity project opens on a clean checkout with packages resolving.
+- [x] The game builds and runs from a clean checkout with one `npm install`.
 - [x] Blender generator library runs headless and is covered by tests.
 - [x] `build_all.py` produces every placeholder asset from scratch.
-- [x] MCP wiring documented for both Unity and Blender.
-- [x] CI runs generator tests and Blueprint validation on every push.
+- [x] MCP wiring documented for Blender.
+- [x] CI runs simulation tests, Blueprint validation, art generator tests and a
+      headless browser smoke test on every push.
 
 **Risk retired:** none — this milestone exists to make the later ones estimable.
 
@@ -58,48 +53,53 @@ Design and technical specification, project skeleton, art pipeline.
 
 ## M1 — Vertical slice: one player, one island
 
-A single player can move around a small piece of terrain and harvest it. No
-networking yet.
+A single player can move around terrain and harvest it. No networking.
 
 **Exit criteria**
 
-- [~] Character controller matching the movement table in the GDD, driven by a
-      `MovementBlueprint`. `CharacterMotor` is a pure step function; 17 tests.
-- [x] 200 m × 200 m test terrain with trees and rocks. Generated, and asserted
-      to satisfy the slope and open-terrain constraints.
-- [~] Harvesting yields materials at the specified rates, with seed-derived
-      weak points. The GDD's loop timings are re-derived by test.
-- [ ] Material counts display in a working HUD. `MaterialWallet` exists; no UI
-      is wired, because a HUD needs prefabs and a scene.
-- [ ] Frame time under 8 ms. **Needs a running Editor and the reference machine.**
-- [~] EditMode tests cover movement value application from Blueprint.
+- [x] Character controller matching the GDD movement table, driven by data.
+      `stepMotor` is a pure step function; 20 tests, including a
+      bit-identical replay check over 1000 randomised commands.
+- [x] Terrain with trees and rocks, satisfying the slope and open-terrain
+      constraints it declares.
+- [x] Harvesting yields materials at the specified rates, with seeded weak
+      points and the GDD's loop timings re-derived by test.
+- [x] Material counts display in a working HUD.
+- [~] Frame budget. 60+ fps on a real GPU is untested; the CI smoke test runs
+      SwiftShader software rendering at ~14 fps, which says nothing about real
+      hardware. Needs measuring on the reference machine.
+- [x] Tests cover movement value application from data.
 
-**Risk retired:** art pipeline actually delivers usable meshes into Unity.
+**Risk retired:** the simulation runs, is deterministic, and is testable
+headless.
 
 ---
 
 ## M2 — Building
 
-The core mechanic, single-player.
+The core mechanic, single-player. **Largely complete and playable.**
 
 **Exit criteria**
 
-- [~] All four piece types placeable on the 4 m grid, driven by
-      `BuildPieceBlueprint`. All four exist as seed assets.
-- [~] Placement preview is grid-accurate. Preview and placement share one
-      transform function, so they cannot disagree by construction.
-- [~] Build-HP ramp implemented; a test shows 95 damage kills a fresh wall and
-      not a matured one.
-- [~] Structural integrity: destroying a support collapses everything above it,
-      budgeted at 32 collapses per tick, and rebuilding a leg rescues the stack.
-- [~] Edit mode with doorway and window variants, as 3×3 masks.
-- [~] A 1×1 box can be built in under 0.7 s of input time.
-- [ ] Practice range scene exists and is playable. **Needs the Editor.**
-- [~] **A new build piece can be added by creating one Blueprint asset and one
-      mesh, with zero C# changes.** The seam exists; unprovable until someone
-      does it in the Editor.
+- [x] All four piece types placeable on the 4 m grid, driven by data.
+- [x] Placement preview is grid-accurate and never disagrees with the placed
+      result. Both go through one transform and one range check — two real bugs
+      came from letting them diverge, and a test now fires 400 randomised aim
+      directions through every piece type against an occupied structure.
+- [x] Build-HP ramp: 95 damage kills a fresh wall and not a matured one, and
+      damage does not freeze the ramp.
+- [x] Structural integrity: destroying a support collapses what it carried,
+      rebuilding a leg inside the 0.4 s window rescues the stack, and collapses
+      are budgeted at 32 per tick.
+- [~] Edit mode. Masks, variants, health scaling and ownership rules are
+      implemented and tested; there is no drag UI in the sandbox yet.
+- [x] A 1×1 box can be built in under 0.7 s of input time.
+- [x] Playable sandbox scene.
+- [x] **A new build piece needs one JSON entry and one mesh, with no code
+      change.**
 
-**Risk retired:** the building system is tractable and asset-driven.
+**Risk retired:** the building system is tractable, data-driven, and fun enough
+to keep iterating on.
 
 ---
 
@@ -109,17 +109,20 @@ Weapons, damage, loot. Still single-player, against dummies.
 
 **Exit criteria**
 
-- [~] Five weapon classes implemented from `WeaponBlueprint` assets. All five
-      exist as seed assets with authored stats.
-- [~] Rarity multipliers applied; headshots register at the specified multipliers.
-- [~] Structure damage multipliers per class working.
-- [x] Loot tables roll correctly; distribution verified statistically over 10⁵
-      rolls. The RNG's weighted pick is verified in Python over 2×10⁵ draws.
-- [~] Chests and floor spawns populate a test POI, deterministically from the
-      match seed.
-- [~] Inventory: 5 slots, pickup, drop, swap, stacking for consumables.
-- [ ] Damage numbers and hit markers. **Needs prefabs and a scene.**
-- [~] **A new weapon can be added with one Blueprint asset and one mesh.**
+- [x] Five weapon classes defined as data, with a firing state machine that
+      branches per fire mode and never per weapon.
+- [x] Rarity multipliers and headshot multipliers applied. A sniper headshot
+      kills through full shield at 50 m; a body shot does not.
+- [x] Structure damage multipliers per class: the SMG shreds builds, the shotgun
+      does not.
+- [x] Loot tables roll correctly; distribution verified over 10⁵ rolls.
+- [x] Chests and floor spawns populate a POI, reproducibly from the match seed.
+- [~] Inventory: slots, stacking and ammo counters are ported from the Unity
+      version but not yet re-tested or wired to the sandbox.
+- [ ] Damage numbers and hit markers.
+- [ ] Weapons usable in the sandbox — the firing code has no trigger bound to it
+      yet, so combat is tested but not playable.
+- [x] **A new weapon needs one JSON entry and one mesh.**
 
 **Risk retired:** combat feel is achievable with the chosen feedback model.
 
@@ -132,24 +135,21 @@ at once.
 
 **Exit criteria**
 
-- [ ] Dedicated server build runs headless on Linux. **Needs a build.**
-- [~] Server-authoritative movement with client prediction and reconciliation.
-      `MovementPredictionBuffer` snaps and replays; a test requires two
-      independently built histories to reconcile bit-identically.
-- [~] Build placement is predicted client-side and confirmed by the server, with
-      correct rollback on rejection. One `Validate` shared by both sides.
-- [~] Lag-compensated hit registration, bounded at 250 ms rewind.
-- [~] Storm implemented across all eight phases. `StormDirector` runs the
-      schedule; the lighting arc is authored as a seed asset but not wired to a
-      light rig.
-- [~] Full match flow: lobby → bus → freefall → match → victory, with only the
-      documented transitions legal.
-- [ ] **100 simulated clients hold a 30 Hz server tick.** **Cannot be measured
-      from here.** This is the milestone's real gate and it remains open.
-- [~] Bandwidth under 128 kbit/s down per client. The 9-byte structure record is
-      asserted by test and the arithmetic checks out against the budget, but the
-      figure is derived, not measured.
-- [ ] Solo mode playable end to end by real players. **Needs a running game.**
+- [ ] Authoritative Node server. The simulation already runs headless, which is
+      most of the work; nothing is wired yet.
+- [~] Client prediction and reconciliation. The design and the determinism it
+      needs are proven — replaying a command sequence is bit-identical — but the
+      reconciliation buffer itself has not been ported yet.
+- [~] Lag compensation. Designed and specified; not ported.
+- [x] Storm across all seven phases: monotonic shrink, reproducible from seed,
+      and no player stranded beyond the rotation clamp.
+- [~] Match flow. Ported in the Unity version; not yet re-ported.
+- [ ] **30 clients hold a 30 Hz server tick**, measured.
+- [ ] **Rendering holds up with 30 players and thousands of build pieces in
+      WebGL.** This is now the project's top technical risk, and the reason for
+      the rescope. Needs instanced rendering and culling that Unity would have
+      provided.
+- [ ] Solo mode playable end to end by real players.
 
 **Risk retired:** the whole thing. If M4 fails, the design needs to change.
 
@@ -159,16 +159,14 @@ at once.
 
 **Exit criteria**
 
-- [~] Duos and Squads, with DBNO and revives, toggled by `MatchRulesBlueprint`.
-      Three rules assets; `SquadState` runs unchanged in all three.
+- [~] Duos and Trios, with DBNO and revives, toggled by data. Three rules
+      entries exist; `SquadState` is not yet re-ported.
 - [ ] Squad UI: teammate health, markers, ping system. **Needs a scene.**
-- [x] Nightfall Isle laid out: 5 major POIs, 12 minor, 8 landmarks, placed on a
-      1400 m heightfield.
-- [x] **Map satisfies the GDD's spacing and slope constraints, verified by a
-      tooling check, not by eye.** 36.9° max slope against a 40° limit, 55.4%
-      open terrain against a 30% minimum, worst nearest-neighbour 247.7 m
-      against a 450 m limit. The validator is itself tested against deliberately
-      broken maps, so passing means something.
+- [~] Nightfall Isle: 14 POIs defined as data for the 800 m map. The Python
+      layout tool still targets the old 1400 m island and needs rescaling.
+- [x] **Map constraints verified by tooling, not by eye.** The validator is
+      itself tested against deliberately broken maps, so passing means
+      something. It needs re-running against the 800 m spec.
 - [ ] Matchmaking assembles a 100-player lobby from a queue.
 - [ ] Full 18-minute match completes without a desync. **Needs a running game.**
 
@@ -210,32 +208,33 @@ and a small test island.
 
 ## Where this actually stands
 
-The simulation layer for M1–M5 is written and specified. The presentation
-layer — scenes, prefabs, UI, the light rig, audio — is not, because every part
-of it needs the Unity Editor.
+**The build-fight loop is playable.** Movement, harvesting, placement, collapse
+and the HP ramp all work in a browser and are covered by tests that run.
 
-**The single next task** is to open `unity/Tonight/` and compile. Nothing in
-this repository has been through a C# compiler, so expect errors. After that,
-in order:
+**What is missing is a match.** Combat is simulated and tested but has no
+trigger bound to it; the storm runs in tests but not in the scene; there is no
+networking, no other players, and no match flow.
 
-1. Fix compile errors and run the 215 EditMode tests. They encode the design
-   decisions; a failure is information, not noise.
-2. Work the Editor Console's list of unbound art references — that list is the
-   binding checklist, and runbook RB-07 covers it.
-3. Export the Blender meshes (`build_all.py`) and bind them to the seed pieces.
-4. Build the practice range scene. That closes most of M1–M2's open boxes at
-   once and makes the build system playable.
-5. Only then start M4's load test, which is the project's real gate.
+The next tasks, in order:
+
+1. Bind weapons to the sandbox — fire, reload, hit structures. Combat is already
+   tested, so this is wiring rather than design.
+2. Run the storm live in the sandbox with the night-clock lighting arc driving
+   the scene. The director works; the renderer ignores it.
+3. Re-port inventory, squads and match flow from the Unity branch. The logic is
+   written and was reviewed; it needs translating and re-testing.
+4. Instanced rendering for build pieces, then measure. This is the gate.
+5. Only then the authoritative server.
 
 ## Honest risks
 
 | Risk | Why it is real |
 | --- | --- |
-| Uncompiled C# | ~4,500 lines never compiled. Some of it is wrong. The tests are written but have never run. |
-| M4's gate is untested | 100 clients at 30 Hz is the criterion that decides whether the design survives, and nothing here moves it. |
-| Deferring netcode (ADR-0003) | Mitigated by writing M1–M3 command-style, and reconciliation determinism is tested — but only against a flat plane, not real collision. |
-| No art bound | Meshes generate and Blueprints exist, but nothing connects them yet. |
-| Collapse cascade cost | Budgeted at 32/tick and tested, but never measured under a real end-game structure. |
+| WebGL at scale | The reason for the rescope. Thousands of build pieces plus 30 players needs instancing and culling that Unity gave us for free. Unmeasured. |
+| No networking yet | The largest unbuilt piece. The simulation is shaped for it — commands, determinism, shared validation — but shaped-for is not built. |
+| Collision is bespoke | Exact for axis-aligned pieces on a known grid, and deliberately limited beyond that. Terrain edge cases will surface. |
+| Art not bound | Meshes generate as glTF; the sandbox still draws procedural three.js primitives. Nothing loads the glTF yet. |
+| Sandbox is not a match | Everything above M2 is tested in isolation, not in a running game. |
 
 ## Not scheduled
 

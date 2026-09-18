@@ -103,9 +103,9 @@ def _grip(proportions: WeaponProportions) -> MeshData:
 def firearm(proportions: WeaponProportions) -> MeshData:
     """Assemble one firearm from the part kit.
 
-    The barrel runs along +X so that in Unity -- after the Y-up conversion at
-    export -- the weapon points down the character's forward axis without a
-    per-asset rotation offset baked into the prefab.
+    The barrel runs along +X so that in the client -- after the Y-up conversion
+    at export -- the weapon points down the character's forward axis without a
+    per-asset rotation offset baked into the mesh.
     """
     name = units.asset_name(units.PREFIX_STATIC_MESH, "Weapon", proportions.key)
     parts: list[MeshData] = []
