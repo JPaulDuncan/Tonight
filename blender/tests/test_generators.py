@@ -208,7 +208,9 @@ class TestAllGeneratedAssets:
 
     def test_triangle_budget_is_respected(self):
         # Pillar 3 and the frame budget: 100 players plus thousands of build
-        # pieces means individual assets stay cheap.
+        # pieces means individual assets stay cheap. Terrain is exempt and has
+        # its own budget -- it is one mesh covering the whole map, not one of
+        # thousands.
         meshes = {**generate_build(), **generate_weapons(), **generate_harvest()}
         for name, mesh in meshes.items():
             assert mesh.triangle_count < 500, f"{name} has {mesh.triangle_count} triangles"

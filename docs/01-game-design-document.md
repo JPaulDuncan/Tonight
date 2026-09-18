@@ -84,13 +84,25 @@ loot-dominated; end-game cycles are seconds long and build-dominated.
 
 ### 2.1 Loop timings (design targets)
 
-| Action | Target time |
-| --- | --- |
-| Harvest one wall's worth of wood (30) | 4.5 s |
-| Place a wall | 0.15 s (input → confirmed) |
-| Build a full 1×1 box (4 walls) | 0.7 s |
-| Ramp-rush 20 m of elevation | ~6 s |
-| Open a chest and evaluate loot | 3 s |
+| Action | Target time | Derivation |
+| --- | --- | --- |
+| Harvest one wall's worth of wood (10) | 0.7 s | 1 swing at 1.4 swings/s |
+| Harvest a 1×1 box's worth of wood (40) | 1.4–2.9 s | 2 swings with weak points, 4 without |
+| Harvest a full tree (150–270 wood) | 7.1 s | 10 swings at 30 pickaxe damage vs 300 HP |
+| Place a wall | 0.15 s | input → confirmed |
+| Build a full 1×1 box (4 walls) | 0.7 s | 4 placements |
+| Ramp-rush 20 m of elevation (5 ramps) | 2.1–3.6 s harvest + ~2 s build | |
+| Open a chest and evaluate loot | 3 s | |
+
+The harvest rows are **derived** from the rates in
+[systems/harvesting.md](systems/harvesting.md) §3 and the piece cost in §4.3,
+not set independently — an earlier draft of this table asserted 4.5 s to gather
+"one wall's worth (30)", which contradicted both the 10-material wall cost in
+§4.3 and the documented swing rate by a factor of five.
+`HarvestAndWalletTests` re-derives these, so the two cannot drift apart again.
+
+The weak-point bonus is what makes the spread between the two harvest columns
+matter: missing every marker doubles the time to a box.
 
 ---
 

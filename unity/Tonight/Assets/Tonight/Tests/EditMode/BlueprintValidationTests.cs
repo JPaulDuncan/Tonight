@@ -75,7 +75,7 @@ namespace Tonight.Tests.EditMode
         }
 
         [Test]
-        public void Movement_JumpVelocityReachesExactlyTheAuthoredHeight()
+        public void Movement_ContinuousJumpVelocityMatchesTheTextbookFormula()
         {
             var movement = TestBlueprints.Create<MovementBlueprint>(new Dictionary<string, object>
             {
@@ -83,10 +83,48 @@ namespace Tonight.Tests.EditMode
                 { "_gravity", -22f },
             });
 
-            // v^2 / 2g is the apex. Derived rather than authored, so retuning
-            // gravity cannot silently change jump height.
-            float apex = movement.JumpVelocity * movement.JumpVelocity / (2f * 22f);
+            float apex = movement.JumpVelocityContinuous * movement.JumpVelocityContinuous
+                         / (2f * 22f);
             Assert.AreEqual(1.1f, apex, 1e-4f);
+            Object.DestroyImmediate(movement);
+        }
+
+        [Test]
+        public void Movement_TickCorrectedJumpActuallyReachesTheAuthoredHeight()
+        {
+            // The continuous formula undershoots in a discrete simulation: at
+            // 30 Hz an authored 1.1 m jump peaks at 0.99 m. A Blueprint field
+            // that does not mean what it says defeats the point of authoring
+            // values as data, so the correction is verified at three tick rates.
+            var movement = TestBlueprints.Create<MovementBlueprint>(new Dictionary<string, object>
+            {
+                { "_jumpHeight", 1.1f },
+                { "_gravity", -22f },
+                { "_terminalVelocity", 55f },
+            });
+
+            foreach (float dt in new[] { 1f / 20f, 1f / 30f, 1f / 60f })
+            {
+                float y = 0f;
+                float vy = movement.JumpVelocityForTick(dt);
+                float apex = 0f;
+
+                for (int i = 0; i < 1000; i++)
+                {
+                    vy += movement.Gravity * dt;
+                    y += vy * dt;
+                    if (y <= 0f)
+                    {
+                        break;
+                    }
+
+                    apex = Mathf.Max(apex, y);
+                }
+
+                Assert.AreEqual(1.1f, apex, 0.01f,
+                    $"Jump apex at {1f / dt:F0} Hz was {apex:F4} m");
+            }
+
             Object.DestroyImmediate(movement);
         }
 

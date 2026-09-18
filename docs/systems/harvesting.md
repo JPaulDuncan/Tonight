@@ -7,8 +7,15 @@
 Harvesting is the pump that feeds building. It must be fast enough not to be a
 chore and slow enough that materials are a real resource under pressure.
 
-The target from GDD §2.1: **one wall's worth of wood (30 materials) in 4.5 s.**
-Everything below is tuned to hit that.
+The anchor is **a full tree in about seven seconds**, yielding 150–270 wood —
+15 to 27 build pieces. That makes a tree a meaningful commitment of time
+mid-fight while keeping materials from feeling scarce in the early game.
+
+Everything in GDD §2.1's loop-timing table is derived from the rates below
+rather than set independently, and `HarvestAndWalletTests` re-derives them so
+the numbers and the prose cannot drift apart. An earlier draft asserted a
+"30 material wall in 4.5 s", which contradicted both the 10-material piece cost
+in GDD §4.3 and these rates by a factor of five.
 
 ## 2. Mechanic
 
@@ -35,9 +42,12 @@ rather than a hold-to-fill bar. Its position is seeded from
 | Vehicle | Metal | 500 | 8 | +8 | +20 |
 | Machinery | Metal | 400 | 8 | +8 | +15 |
 
-Pickaxe swing rate: **1.4 swings/s**. A tree at 12 + 12 bonus per hit yields
-roughly 34 materials/s with consistent weak-point hits, or ~17/s without — so the
-4.5 s wall target is achievable with good hits and misses cost real time.
+Pickaxe swing rate: **1.4 swings/s**, pickaxe damage **30**.
+
+A tree therefore takes 10 swings (7.1 s) and yields 150 wood with no weak-point
+hits or 270 with all of them. At 10 materials per build piece that is 15 to 27
+pieces from one tree, and hitting every weak point is worth 80% more material
+for the same time spent — which is the whole reason the weak point exists.
 
 Metal is deliberately the slowest per second and the strongest to build with.
 

@@ -27,6 +27,7 @@ CATEGORY_FOLDERS = {
     "weapon": "Weapons",
     "harvest": "Harvestables",
     "tool": "Weapons",
+    "terrain": "Terrain",
 }
 
 
@@ -83,10 +84,14 @@ def check_before_export(mesh: MeshData) -> list[str]:
     size = mesh.size()
     if max(size) <= 0.0:
         problems.append(f"{mesh.name}: mesh has zero extent in every axis.")
-    if max(size) > 500.0:
+    # Terrain is legitimately map-sized; everything else over 500 m is
+    # almost certainly a metres/centimetres mix-up.
+    extent_limit = 4000.0 if mesh.name.startswith("SM_Terrain") else 500.0
+    if max(size) > extent_limit:
         problems.append(
-            f"{mesh.name}: largest extent is {max(size):.1f} m, which is almost "
-            "certainly a unit error -- scenes author in metres."
+            f"{mesh.name}: largest extent is {max(size):.1f} m, above the "
+            f"{extent_limit:.0f} m limit for this asset kind -- almost "
+            "certainly a unit error, since scenes author in metres."
         )
 
     try:

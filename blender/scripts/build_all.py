@@ -30,7 +30,7 @@ def _repo_root() -> Path:
 
 sys.path.insert(0, str(_repo_root() / "blender" / "lib"))
 
-from tonight import build_pieces, harvestables, weapons  # noqa: E402
+from tonight import build_pieces, harvestables, terrain, weapons  # noqa: E402
 from tonight.export import (  # noqa: E402
     EXPORT_ROOT,
     build_record,
@@ -44,6 +44,7 @@ GENERATORS = {
     "build": build_pieces.generate_all,
     "weapon": weapons.generate_all,
     "harvest": harvestables.generate_all,
+    "terrain": terrain.generate_all,
 }
 
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetCount": 33,
+  "assetCount": 34,
   "assets": [
     {
       "name": "SM_Build_Cone_Metal",
@@ -352,6 +352,19 @@
         1.5968
       ],
       "content_hash": "a78a2ff4013110e1"
+    },
+    {
+      "name": "SM_Terrain_TestIsland",
+      "category": "terrain",
+      "relative_path": "blender/exports/Terrain/SM_Terrain_TestIsland.fbx",
+      "vertex_count": 10201,
+      "triangle_count": 20000,
+      "size_metres": [
+        200.0,
+        200.0,
+        14.1348
+      ],
+      "content_hash": "c5baf2362db76b52"
     },
     {
       "name": "SM_Tool_Pickaxe",
