@@ -13,6 +13,20 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
 const errors = [];
 const logs = [];
+
+// Playwright's mouse.move takes absolute page coordinates, but a pointer-locked
+// game reads the *delta* between them. Tracking our own cursor is what makes a
+// nudge repeatable; moving to the same absolute point twice sends a delta of
+// zero and the aim never budges.
+let cursorX = 640;
+let cursorY = 360;
+async function nudge(dx, dy) {
+  cursorX += dx;
+  cursorY += dy;
+  await page.mouse.move(cursorX, cursorY, { steps: 2 });
+  await page.waitForTimeout(70);
+}
+
 page.on("console", (m) => { logs.push(`${m.type()}: ${m.text()}`); });
 page.on("pageerror", (e) => errors.push(String(e)));
 
@@ -91,6 +105,73 @@ if (afterReset !== 0) errors.push(`reset left ${afterReset} pieces`);
 await page.mouse.click(640, 360);
 await page.waitForTimeout(400);
 
+// The walk cycle actually runs, and the limbs oppose each other.
+//
+// A static pose and a running cycle look identical in a screenshot, so this
+// samples the joints while walking. Legs in phase is a hop; arms in phase with
+// their own leg is a shamble. Both are silent failures otherwise.
+await page.keyboard.down("KeyW");
+await page.waitForTimeout(700);
+const mid = await page.evaluate(() => window.__tonight?.describeAvatar?.());
+await page.keyboard.up("KeyW");
+await page.waitForTimeout(200);
+const still = await page.evaluate(() => window.__tonight?.describeAvatar?.());
+console.log("walking:", JSON.stringify({ speed: mid?.speed, bob: mid?.bobY, joints: mid?.joints }));
+
+if (!mid || !mid.joints.LegLeft) {
+  errors.push("no avatar joints - is the character articulated?");
+} else {
+  const legL = mid.joints.LegLeft[0];
+  const legR = mid.joints.LegRight[0];
+  const armL = mid.joints.ArmLeft[0];
+  if (Math.abs(legL) < 0.02 && Math.abs(legR) < 0.02) {
+    errors.push("the legs did not move while walking");
+  }
+  if (Math.sign(legL) === Math.sign(legR) && Math.abs(legL) > 0.05) {
+    errors.push(`legs are in phase (${legL.toFixed(2)}, ${legR.toFixed(2)}) - that is a hop`);
+  }
+  if (Math.sign(armL) === Math.sign(legL) && Math.abs(armL) > 0.05) {
+    errors.push("the left arm swings with the left leg, not against it");
+  }
+  if (mid.speed < 1) errors.push(`walking speed read as ${mid.speed} m/s`);
+  // Coming to rest must settle, or the character twitches while standing.
+  if (still && Math.abs(still.joints.LegLeft[0]) > 0.35) {
+    errors.push("the legs did not settle after stopping");
+  }
+}
+
+// Every material the player can build with has its texture bound. A missing map
+// is a flat-colour wall: easy to miss by eye, trivial to assert.
+//
+// On a cleared world, because the materials are created lazily when a piece is
+// first placed and a congested area silently rejects the placement.
+await page.keyboard.press("KeyR");
+await page.waitForTimeout(300);
+// One material per piece *type* rather than per direction: a wall, a floor and
+// a ramp occupy three different slots of the same cell, so all three place
+// without turning. Turning between placements was flaky -- the third wall kept
+// landing somewhere unbuildable, which tested the aim rather than the textures.
+for (const [piece, material] of [["Digit1", "KeyZ"], ["Digit2", "KeyX"], ["Digit3", "KeyC"]]) {
+  await page.keyboard.press(piece);
+  await page.waitForTimeout(100);
+  await page.keyboard.press(material);
+  await page.waitForTimeout(100);
+  await page.mouse.click(640, 360);
+  await page.waitForTimeout(320);
+}
+const materials = await page.evaluate(() => window.__tonight?.describeMaterials?.() ?? {});
+console.log("materials:", JSON.stringify(materials));
+
+const buildMaterials = Object.entries(materials).filter(([key]) => !key.startsWith("prop:"));
+const untextured = Object.entries(materials).filter(([, m]) => !m.map).map(([k]) => k);
+if (untextured.length) errors.push(`materials with no texture: ${untextured.join(", ")}`);
+if (buildMaterials.length < 3) {
+  errors.push(
+    `only ${buildMaterials.length} of 3 build materials were exercised: ` +
+      buildMaterials.map(([k]) => k).join(", "),
+  );
+}
+
 // Swap back to a wall and put one directly ahead, so the edit phase below has a
 // known piece under the crosshair rather than whatever the box-building left.
 await page.keyboard.press("KeyR");
@@ -108,19 +189,6 @@ await page.waitForTimeout(400);
 // path that breaks the first time the field of view changes.
 const subCellNow = () =>
   page.evaluate(() => window.__tonight?.describeEdit?.().target ?? { found: false });
-
-// Playwright's mouse.move takes absolute page coordinates, but a pointer-locked
-// game reads the *delta* between them. Tracking our own cursor is what makes a
-// nudge repeatable; moving to the same absolute point twice sends a delta of
-// zero and the aim never budges.
-let cursorX = 640;
-let cursorY = 360;
-async function nudge(dx, dy) {
-  cursorX += dx;
-  cursorY += dy;
-  await page.mouse.move(cursorX, cursorY, { steps: 2 });
-  await page.waitForTimeout(70);
-}
 
 async function aimAtSubCell(wanted) {
   // One sub-cell is 1.33 m across a wall 8 m away, so roughly ten degrees of

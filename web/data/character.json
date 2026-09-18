@@ -1,26 +1,170 @@
 {
   "movement": [
-    { "id": "movement.default", "displayName": "Default movement",
+    {
+      "id": "movement.default",
+      "displayName": "Default movement",
       "description": "No slide, no dash, no double jump. Every movement verb competes with building for the skill ceiling, and building is the pillar.",
-      "walkSpeed": 4.6, "sprintSpeed": 7.4, "crouchSpeed": 2.3,
-      "acceleration": 60, "deceleration": 45, "airControl": 0.35,
-      "jumpHeight": 1.1, "gravity": -22, "terminalVelocity": 55,
-      "fallDamageThreshold": 3.5, "fallDamagePerMetre": 10,
-      "mantleMaxHeight": 1.6, "mantleSeconds": 0.4,
-      "standHeight": 1.8, "crouchHeight": 0.9 }
+      "walkSpeed": 4.6,
+      "sprintSpeed": 7.4,
+      "crouchSpeed": 2.3,
+      "acceleration": 60,
+      "deceleration": 45,
+      "airControl": 0.35,
+      "jumpHeight": 1.1,
+      "gravity": -22,
+      "terminalVelocity": 55,
+      "fallDamageThreshold": 3.5,
+      "fallDamagePerMetre": 10,
+      "mantleMaxHeight": 1.6,
+      "mantleSeconds": 0.4,
+      "standHeight": 1.8,
+      "crouchHeight": 0.9
+    }
   ],
   "characters": [
-    { "id": "character.default", "displayName": "Default character",
+    {
+      "id": "character.default",
+      "displayName": "Default character",
       "movementId": "movement.default",
-      "maxHealth": 100, "maxShield": 100, "cameraHeight": 1.65,
+      "maxHealth": 100,
+      "maxShield": 100,
+      "cameraHeight": 1.65,
       "hitboxes": [
-        { "name": "Head", "isHead": true, "damageScale": 1 },
-        { "name": "Chest", "isHead": false, "damageScale": 1 },
-        { "name": "Pelvis", "isHead": false, "damageScale": 1 },
-        { "name": "ArmLeft", "isHead": false, "damageScale": 0.85 },
-        { "name": "ArmRight", "isHead": false, "damageScale": 0.85 },
-        { "name": "LegLeft", "isHead": false, "damageScale": 0.85 },
-        { "name": "LegRight", "isHead": false, "damageScale": 0.85 }
-      ] }
+        {
+          "name": "Head",
+          "isHead": true,
+          "damageScale": 1
+        },
+        {
+          "name": "Chest",
+          "isHead": false,
+          "damageScale": 1
+        },
+        {
+          "name": "Pelvis",
+          "isHead": false,
+          "damageScale": 1
+        },
+        {
+          "name": "ArmLeft",
+          "isHead": false,
+          "damageScale": 0.85
+        },
+        {
+          "name": "ArmRight",
+          "isHead": false,
+          "damageScale": 0.85
+        },
+        {
+          "name": "LegLeft",
+          "isHead": false,
+          "damageScale": 0.85
+        },
+        {
+          "name": "LegRight",
+          "isHead": false,
+          "damageScale": 0.85
+        }
+      ],
+      "locomotionId": "locomotion.default",
+      "partTextures": {
+        "Head": "T_Character_Skin",
+        "ArmLeft": "T_Character_Skin",
+        "ArmRight": "T_Character_Skin",
+        "Chest": "T_Character_Cloth",
+        "Pelvis": "T_Character_Cloth",
+        "LegLeft": "T_Character_Cloth",
+        "LegRight": "T_Character_Cloth"
+      }
+    }
+  ],
+  "locomotion": [
+    {
+      "id": "locomotion.default",
+      "displayName": "Default locomotion",
+      "description": "A walk cycle as data. Phase advances with distance travelled, not with time, so the feet keep pace with the ground at any speed instead of skating.",
+      "strideMetres": 1.9,
+      "bobMetres": 0.055,
+      "leanDegreesPerMetrePerSecond": 1.1,
+      "maxLeanDegrees": 9,
+      "blendInMetresPerSecond": 0.6,
+      "cycle": [
+        {
+          "part": "LegLeft",
+          "axis": "x",
+          "amplitudeDegrees": 34,
+          "phase": 0.0
+        },
+        {
+          "part": "LegRight",
+          "axis": "x",
+          "amplitudeDegrees": 34,
+          "phase": 0.5
+        },
+        {
+          "part": "ArmLeft",
+          "axis": "x",
+          "amplitudeDegrees": 26,
+          "phase": 0.5
+        },
+        {
+          "part": "ArmRight",
+          "axis": "x",
+          "amplitudeDegrees": 26,
+          "phase": 0.0
+        },
+        {
+          "part": "Chest",
+          "axis": "y",
+          "amplitudeDegrees": 6,
+          "phase": 0.25
+        },
+        {
+          "part": "Head",
+          "axis": "y",
+          "amplitudeDegrees": 4,
+          "phase": 0.75
+        }
+      ],
+      "airborne": [
+        {
+          "part": "LegLeft",
+          "axis": "x",
+          "degrees": -28
+        },
+        {
+          "part": "LegRight",
+          "axis": "x",
+          "degrees": 14
+        },
+        {
+          "part": "ArmLeft",
+          "axis": "x",
+          "degrees": 46
+        },
+        {
+          "part": "ArmRight",
+          "axis": "x",
+          "degrees": 46
+        }
+      ],
+      "crouched": [
+        {
+          "part": "LegLeft",
+          "axis": "x",
+          "degrees": -18
+        },
+        {
+          "part": "LegRight",
+          "axis": "x",
+          "degrees": -18
+        },
+        {
+          "part": "Chest",
+          "axis": "x",
+          "degrees": 16
+        }
+      ]
+    }
   ]
 }

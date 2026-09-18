@@ -29,10 +29,21 @@ export interface ArtRecord {
   readonly content_hash: string;
 }
 
+/** One texture, as `tonight.export.TextureRecord` writes it. */
+export interface TextureRecord {
+  readonly name: string;
+  readonly category: string;
+  /** Path relative to the art root, e.g. `Textures/T_Build_Wood.png`. */
+  readonly file: string;
+  readonly size_pixels: number;
+  readonly content_hash: string;
+}
+
 export interface ArtManifest {
   readonly version: number;
   readonly assetCount: number;
   readonly assets: readonly ArtRecord[];
+  readonly textures?: readonly TextureRecord[];
 }
 
 /** One primitive of a loaded mesh, carrying the generator's part role. */
@@ -40,6 +51,11 @@ export interface ArtPart {
   /** The generator's part name with its instance suffix stripped: `Trunk`. */
   readonly group: string;
   readonly geometry: THREE.BufferGeometry;
+  /**
+   * The joint this part rotates about, in glTF space, when the generator
+   * emitted one. Only articulated meshes have these.
+   */
+  readonly pivot?: readonly [number, number, number];
 }
 
 /**
@@ -56,6 +72,7 @@ export function assetKey(name: string): string {
 
 export class ArtLibrary {
   private readonly parts = new Map<string, ArtPart[]>();
+  private readonly textures = new Map<string, THREE.Texture>();
   private readonly merged = new Map<string, THREE.BufferGeometry>();
   private readonly byKey = new Map<string, string>();
 
@@ -88,9 +105,30 @@ export class ArtLibrary {
     const selected = manifest.assets.filter(wanted);
     const library = new ArtLibrary(selected);
     const loader = new GLTFLoader();
+    const textureLoader = new THREE.TextureLoader();
 
-    await Promise.all(
-      selected.map(async (record) => {
+    const textureJobs = (manifest.textures ?? []).map(async (record) => {
+      const url = new URL(record.file, new URL(baseUrl, location.href)).href;
+      let texture: THREE.Texture;
+      try {
+        texture = await textureLoader.loadAsync(url);
+      } catch (cause) {
+        throw new Error(`Failed to load texture ${record.name} from ${url}: ${String(cause)}`);
+      }
+      // Build pieces repeat one tile across a 4 m face, so wrapping is the
+      // normal case rather than the exception.
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      // Anisotropy matters here more than resolution does: these are tiled
+      // surfaces seen at a glancing angle from a third-person camera.
+      texture.anisotropy = 4;
+      library.textures.set(record.name, texture);
+    });
+
+    await Promise.all([
+      ...textureJobs,
+      ...selected.map(async (record) => {
         const url = new URL(record.file, new URL(baseUrl, location.href)).href;
         let gltf;
         try {
@@ -100,7 +138,7 @@ export class ArtLibrary {
         }
         library.adopt(record, gltf.scene);
       }),
-    );
+    ]);
 
     return library;
   }
@@ -115,7 +153,8 @@ export class ArtLibrary {
       // `mesh.userData`, which is empty here. Falling back to the asset name
       // keeps a single-part mesh working without a special case.
       const group = (geometry.userData?.["group"] as string | undefined) ?? record.name;
-      parts.push({ group, geometry });
+      const pivot = geometry.userData?.["pivot"] as [number, number, number] | undefined;
+      parts.push(pivot ? { group, geometry, pivot } : { group, geometry });
     });
 
     if (parts.length === 0) {
@@ -126,6 +165,18 @@ export class ArtLibrary {
 
   has(name: string): boolean {
     return this.parts.has(name);
+  }
+
+  /**
+   * A loaded texture by asset name.
+   *
+   * Returns undefined rather than throwing: a Blueprint may legitimately name
+   * no texture, and an untextured surface is a flat colour rather than an
+   * invisible one. That is the opposite of a missing *mesh*, which is why this
+   * is the one lookup here that is allowed to come back empty.
+   */
+  texture(name: string | undefined): THREE.Texture | undefined {
+    return name === undefined ? undefined : this.textures.get(name);
   }
 
   /** Every primitive of an asset, so a caller can give each part its own material. */

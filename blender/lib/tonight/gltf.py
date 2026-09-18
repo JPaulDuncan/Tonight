@@ -191,7 +191,13 @@ def build_gltf_document(mesh: MeshData) -> tuple[dict[str, object], bytes]:
         # trunk and the canopy different materials. glTF has no per-primitive
         # name field, and inventing a material here would put an art decision in
         # the pipeline instead of in a Blueprint.
-        primitive["extras"] = {"group": group_name}
+        extras: dict[str, object] = {"group": group_name}
+        pivot = mesh.pivots.get(group_name)
+        if pivot is not None:
+            # In glTF space, so the client can use it without knowing which way
+            # up Blender was.
+            extras["pivot"] = list(to_gltf_position(pivot))
+        primitive["extras"] = extras
         primitives.append(primitive)
 
     document: dict[str, object] = {

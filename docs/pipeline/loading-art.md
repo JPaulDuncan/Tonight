@@ -143,6 +143,56 @@ The generated variants are cheap to tell apart, which is what makes the browser
 test meaningful: a solid wall is 408 vertices and a doorway is 168, so the smoke
 test can assert the *variant* mesh loaded rather than just that something did.
 
+## Textures
+
+Generated as PNG alongside the meshes and listed in the manifest's `textures`
+array. The client loads them with `THREE.TextureLoader`, sets `RepeatWrapping`
+(a build piece tiles one 4 m face) and sRGB colour space, and hands them out by
+asset name.
+
+Which texture goes where is **Blueprint data**, not code:
+
+| Blueprint | Field |
+| --- | --- |
+| `BuildMaterialBlueprint` | `texture`, e.g. `T_Build_Wood` |
+| `HarvestableBlueprint` | `partTextures`, e.g. `{ "Trunk": "T_Harvest_Bark" }` |
+| `CharacterBlueprint` | `partTextures`, keyed by hitbox name |
+
+The material's `colour` stays and tints the map, so the two have to agree: a wood
+texture under a stone tint reads as neither. `web/tests/assets.test.ts` checks
+every named texture exists, so a typo fails in Node rather than rendering a
+flat-colour wall nobody notices.
+
+Unlike a missing *mesh*, a missing texture is allowed: `ArtLibrary.texture()`
+returns undefined and the surface falls back to flat colour. An untextured wall
+is ugly; an untextured wall is not invisible, which is the distinction that
+makes the mesh loader strict and this one lenient.
+
+## Animation
+
+The walk cycle is a Blueprint (`LocomotionBlueprint` in `web/data/character.json`),
+not a sine wave hardcoded in TypeScript. Retiming the walk, or giving a future
+character a different gait, is a JSON edit.
+
+Two pieces make it work:
+
+**Pivots.** Each articulated primitive carries its joint in `extras.pivot`. The
+generator emits it because the generator is what knows where a hip is; deriving
+it in the renderer would mean a rule keyed to part names, which is the
+behaviour-from-content anti-pattern in miniature. The client hangs each part off
+a node at its pivot and offsets the geometry back by the same amount, so a limb
+turns about its joint rather than about the character's feet.
+
+**Distance, not time.** The cycle phase advances with metres travelled, not with
+seconds. That is what stops the feet skating when the speed changes, and it makes
+the animation frame-rate independent for free: `poseFor` is a pure function of
+distance, speed and state, tested in Node in `web/tests/pose.test.ts`.
+
+Speed itself comes from the *frame* delta, not the tick rate. `updateAvatar`
+runs once per rendered frame and several simulation ticks can happen inside one,
+so dividing by the tick interval overstated speed by the ratio of the two --
+which pinned the forward lean at its cap at any frame rate below 30.
+
 ## What is not loaded yet
 
 - **Terrain.** The client generates its heightfield in the browser, because

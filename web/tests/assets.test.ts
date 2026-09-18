@@ -12,11 +12,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { blueprints, library } from "@/blueprints/library";
-import { assetKey, buildPieceKey, type ArtManifest } from "@/render/assets";
+import { assetKey, buildPieceKey, type ArtManifest, type TextureRecord } from "@/render/assets";
 
 const manifest = JSON.parse(
   readFileSync(new URL("../../blender/exports/manifest.json", import.meta.url), "utf8"),
-) as ArtManifest;
+) as ArtManifest & { textureCount?: number };
 
 const keys = new Set(manifest.assets.map((a) => assetKey(a.name)));
 
@@ -179,5 +179,110 @@ describe.skipIf(!artGenerated)("generated meshes agree with the collision model"
     expect(Math.max(...ys)).toBeCloseTo(4, 3);
     expect(Math.min(...ys)).toBeLessThanOrEqual(0);
     expect(Math.min(...ys)).toBeGreaterThan(-0.5); // the skirt, and no more
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Textures
+// ---------------------------------------------------------------------------
+
+const textureNames = new Set((manifest.textures ?? []).map((t) => t.name));
+
+describe("textures", () => {
+  it("ships some", () => {
+    expect(textureNames.size).toBeGreaterThan(0);
+    expect(manifest.textures).toHaveLength(manifest.textureCount ?? -1);
+  });
+
+  it("names a file for every texture", () => {
+    for (const texture of manifest.textures ?? []) {
+      expect(texture.file, texture.name).toMatch(/^Textures\/T_[A-Za-z0-9_]+\.png$/);
+    }
+  });
+
+  it("gives every build material a texture that exists", () => {
+    // The Blueprint names the texture, so a typo here is a wall that silently
+    // renders as flat colour. Cheap to catch, invisible otherwise.
+    const missing: string[] = [];
+    for (const material of library.buildMaterials) {
+      if (!material.texture) missing.push(`${material.id} names no texture`);
+      else if (!textureNames.has(material.texture)) {
+        missing.push(`${material.id} -> ${material.texture}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("gives every character part a texture that exists", () => {
+    const missing: string[] = [];
+    for (const character of library.characters) {
+      for (const [part, texture] of Object.entries(character.partTextures ?? {})) {
+        if (!textureNames.has(texture)) missing.push(`${character.id}.${part} -> ${texture}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("gives every harvestable part texture a texture that exists", () => {
+    const missing: string[] = [];
+    for (const harvestable of library.harvestables) {
+      for (const [part, texture] of Object.entries(harvestable.partTextures ?? {})) {
+        if (!textureNames.has(texture)) missing.push(`${harvestable.id}.${part} -> ${texture}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("uses a power-of-two size, so the GPU can mipmap it", () => {
+    // A non-power-of-two texture with RepeatWrapping is a WebGL error, not a
+    // blurry texture: it renders black.
+    for (const texture of manifest.textures ?? []) {
+      const size = texture.size_pixels;
+      expect(size & (size - 1), `${texture.name} is ${size}px`).toBe(0);
+    }
+  });
+});
+
+describe("character articulation", () => {
+  it("exports a pivot for every part the locomotion drives", () => {
+    // Without a pivot a limb rotates about the character's feet, which looks
+    // like the leg detaching and swinging from the floor. The check has to be
+    // here because the pivot is in the .glb, not in the manifest.
+    const glb = readGlb("Characters/SM_Character_Default.glb");
+    if (!glb) return;
+
+    const pivots = new Map<string, number[]>();
+    for (const primitive of glb.json.meshes[0].primitives) {
+      const extras = primitive.extras ?? {};
+      if (extras.pivot) pivots.set(extras.group, extras.pivot);
+    }
+
+    const locomotion = blueprints().locomotion("locomotion.default");
+    for (const track of [...locomotion.cycle, ...locomotion.airborne, ...locomotion.crouched]) {
+      expect(pivots.has(track.part), `no pivot for ${track.part}`).toBe(true);
+    }
+  });
+
+  it("puts the hips below the shoulders", () => {
+    // A cheap sanity check on the joint positions: if these were swapped the
+    // arms would swing from the hips and the legs from the chest.
+    const glb = readGlb("Characters/SM_Character_Default.glb");
+    if (!glb) return;
+
+    const pivot = (group: string) =>
+      glb.json.meshes[0].primitives.find((p: any) => p.extras?.group === group)?.extras.pivot;
+
+    expect(pivot("LegLeft")[1]).toBeLessThan(pivot("ArmLeft")[1]);
+    expect(pivot("Head")[1]).toBeGreaterThan(pivot("ArmLeft")[1]);
+  });
+
+  it("mirrors the left and right joints", () => {
+    const glb = readGlb("Characters/SM_Character_Default.glb");
+    if (!glb) return;
+    const pivot = (group: string) =>
+      glb.json.meshes[0].primitives.find((p: any) => p.extras?.group === group)?.extras.pivot;
+
+    expect(pivot("LegLeft")[0]).toBeCloseTo(-pivot("LegRight")[0], 6);
+    expect(pivot("ArmLeft")[0]).toBeCloseTo(-pivot("ArmRight")[0], 6);
   });
 });

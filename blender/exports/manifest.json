@@ -1,6 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "assetCount": 35,
+  "textureCount": 9,
   "assets": [
     {
       "name": "SM_Build_Cone_Metal",
@@ -491,6 +492,80 @@
         0.272
       ],
       "content_hash": "09167687ad9d579a"
+    }
+  ],
+  "textures": [
+    {
+      "name": "T_Build_Metal",
+      "category": "build",
+      "file": "Textures/T_Build_Metal.png",
+      "relative_path": "blender/exports/Textures/T_Build_Metal.png",
+      "size_pixels": 256,
+      "content_hash": "b1744504f6ee90d6"
+    },
+    {
+      "name": "T_Build_Stone",
+      "category": "build",
+      "file": "Textures/T_Build_Stone.png",
+      "relative_path": "blender/exports/Textures/T_Build_Stone.png",
+      "size_pixels": 256,
+      "content_hash": "22e150f765b65840"
+    },
+    {
+      "name": "T_Build_Wood",
+      "category": "build",
+      "file": "Textures/T_Build_Wood.png",
+      "relative_path": "blender/exports/Textures/T_Build_Wood.png",
+      "size_pixels": 256,
+      "content_hash": "e40e3625a926e1c7"
+    },
+    {
+      "name": "T_Character_Cloth",
+      "category": "character",
+      "file": "Textures/T_Character_Cloth.png",
+      "relative_path": "blender/exports/Textures/T_Character_Cloth.png",
+      "size_pixels": 256,
+      "content_hash": "9c681c2d81216d04"
+    },
+    {
+      "name": "T_Character_Skin",
+      "category": "character",
+      "file": "Textures/T_Character_Skin.png",
+      "relative_path": "blender/exports/Textures/T_Character_Skin.png",
+      "size_pixels": 256,
+      "content_hash": "2a8b1ee75c282e2a"
+    },
+    {
+      "name": "T_Harvest_Bark",
+      "category": "harvest",
+      "file": "Textures/T_Harvest_Bark.png",
+      "relative_path": "blender/exports/Textures/T_Harvest_Bark.png",
+      "size_pixels": 256,
+      "content_hash": "e03857774b3b3ccd"
+    },
+    {
+      "name": "T_Harvest_Canopy",
+      "category": "harvest",
+      "file": "Textures/T_Harvest_Canopy.png",
+      "relative_path": "blender/exports/Textures/T_Harvest_Canopy.png",
+      "size_pixels": 256,
+      "content_hash": "d1c188d7d5bf7ed5"
+    },
+    {
+      "name": "T_Harvest_Rock",
+      "category": "harvest",
+      "file": "Textures/T_Harvest_Rock.png",
+      "relative_path": "blender/exports/Textures/T_Harvest_Rock.png",
+      "size_pixels": 256,
+      "content_hash": "4aaaecb845b0ae01"
+    },
+    {
+      "name": "T_Terrain_Ground",
+      "category": "terrain",
+      "file": "Textures/T_Terrain_Ground.png",
+      "relative_path": "blender/exports/Textures/T_Terrain_Ground.png",
+      "size_pixels": 256,
+      "content_hash": "25656d9acf39f8c3"
     }
   ]
 }

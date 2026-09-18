@@ -1,39 +1,124 @@
 {
   "buildMaterials": [
-    { "id": "material.wood", "displayName": "Wood", "materialKind": "wood",
+    {
+      "id": "material.wood",
+      "displayName": "Wood",
+      "materialKind": "wood",
       "description": "Fast to mature, weakest at full health. The rush material.",
-      "buildHealth": 90, "fullHealth": 150, "buildTimeSeconds": 3,
-      "costPerPiece": 10, "maxCarried": 500, "colour": "#b8823f" },
-    { "id": "material.stone", "displayName": "Stone", "materialKind": "stone",
-      "buildHealth": 90, "fullHealth": 300, "buildTimeSeconds": 4,
-      "costPerPiece": 10, "maxCarried": 500, "colour": "#94949a" },
-    { "id": "material.metal", "displayName": "Metal", "materialKind": "metal",
+      "buildHealth": 90,
+      "fullHealth": 150,
+      "buildTimeSeconds": 3,
+      "costPerPiece": 10,
+      "maxCarried": 500,
+      "colour": "#b8823f",
+      "texture": "T_Build_Wood"
+    },
+    {
+      "id": "material.stone",
+      "displayName": "Stone",
+      "materialKind": "stone",
+      "buildHealth": 90,
+      "fullHealth": 300,
+      "buildTimeSeconds": 4,
+      "costPerPiece": 10,
+      "maxCarried": 500,
+      "colour": "#94949a",
+      "texture": "T_Build_Stone"
+    },
+    {
+      "id": "material.metal",
+      "displayName": "Metal",
+      "materialKind": "metal",
       "description": "Slowest to mature and to harvest; strongest once it does.",
-      "buildHealth": 90, "fullHealth": 500, "buildTimeSeconds": 5,
-      "costPerPiece": 10, "maxCarried": 500, "colour": "#6b8ca3" }
+      "buildHealth": 90,
+      "fullHealth": 500,
+      "buildTimeSeconds": 5,
+      "costPerPiece": 10,
+      "maxCarried": 500,
+      "colour": "#6b8ca3",
+      "texture": "T_Build_Metal"
+    }
   ],
   "buildPieces": [
-    { "id": "piece.wall", "displayName": "Wall", "placement": "wall", "occupancy": "face",
+    {
+      "id": "piece.wall",
+      "displayName": "Wall",
+      "placement": "wall",
+      "occupancy": "face",
       "costOverride": -1,
       "editVariants": [
-        { "variantName": "Doorway",
-          "gridMask": [true, true, true, true, false, true, true, false, true],
-          "healthScale": 0.85 },
-        { "variantName": "Window",
-          "gridMask": [true, true, true, true, false, true, true, true, true],
-          "healthScale": 0.92 }
-      ] },
-    { "id": "piece.floor", "displayName": "Floor", "placement": "floor", "occupancy": "face",
+        {
+          "variantName": "Doorway",
+          "gridMask": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            true,
+            true,
+            false,
+            true
+          ],
+          "healthScale": 0.85
+        },
+        {
+          "variantName": "Window",
+          "gridMask": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            true
+          ],
+          "healthScale": 0.92
+        }
+      ]
+    },
+    {
+      "id": "piece.floor",
+      "displayName": "Floor",
+      "placement": "floor",
+      "occupancy": "face",
       "costOverride": -1,
       "editVariants": [
-        { "variantName": "Trapdoor",
-          "gridMask": [true, true, true, true, false, true, true, false, true],
-          "healthScale": 0.85 }
-      ] },
-    { "id": "piece.ramp", "displayName": "Ramp", "placement": "ramp", "occupancy": "interior",
+        {
+          "variantName": "Trapdoor",
+          "gridMask": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            true,
+            true,
+            false,
+            true
+          ],
+          "healthScale": 0.85
+        }
+      ]
+    },
+    {
+      "id": "piece.ramp",
+      "displayName": "Ramp",
+      "placement": "ramp",
+      "occupancy": "interior",
       "description": "Rises exactly one cell over one cell, so the 45 degrees is exact.",
-      "costOverride": -1, "editVariants": [] },
-    { "id": "piece.cone", "displayName": "Cone", "placement": "cone", "occupancy": "interior",
-      "costOverride": -1, "editVariants": [] }
+      "costOverride": -1,
+      "editVariants": []
+    },
+    {
+      "id": "piece.cone",
+      "displayName": "Cone",
+      "placement": "cone",
+      "occupancy": "interior",
+      "costOverride": -1,
+      "editVariants": []
+    }
   ]
 }

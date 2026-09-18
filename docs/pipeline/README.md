@@ -51,6 +51,32 @@ axis change and no handedness flip — simpler than the old Unity target, but
 still the kind of setting that looks fine in the viewport and surfaces much
 later as rotated props, so it lives in exactly one function.
 
+## Textures are generated too
+
+Same rule, same reasons. `blender/lib/tonight/textures.py` writes PNG from pure
+Python -- `zlib` and `struct` are all a PNG needs -- so a texture is a readable
+function rather than an opaque binary, carries a content hash in the manifest,
+and regenerates from a clean checkout like everything else.
+
+This was not the first choice. The obvious move is to pull CC0 tiles from Poly
+Haven or similar, and that is what "source some textures" would normally mean.
+It was not possible here: the environment's proxy allows package registries and
+denies everything else, so no asset site was reachable.
+
+It turned out to be the better answer anyway, and would have been worth choosing
+on the merits:
+
+- [ADR-0004](../adr/0004-procedural-art-pipeline.md) rejects downloaded *models*
+  on licensing and reviewability. Neither argument is weaker for images.
+- A downloaded tile is 2K of photographic detail under a stylised, faceted mesh,
+  which fights pillar 3 rather than serving it.
+- A generated tile is parametric: the plank count, the mortar width and the
+  rivet spacing are arguments, so a new material is a call rather than a
+  download.
+
+What it costs is honest: these are flat, blocky, low-frequency surfaces. They
+read at gameplay distance and they will not survive a close-up.
+
 ## Running it
 
 ```bash

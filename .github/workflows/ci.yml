@@ -88,7 +88,7 @@ jobs:
         # Python, which is exactly the situation the pipeline exists to avoid.
         run: |
           found=$(git ls-files 'blender/exports/**' \
-            | grep -Ei '\.(fbx|glb|gltf|obj|blend)$' || true)
+            | grep -Ei '\.(fbx|glb|gltf|obj|blend|png)$' || true)
           if [ -n "$found" ]; then
             echo "::error::Exported binaries are committed:"
             echo "$found"

@@ -113,7 +113,7 @@ Everything below runs with no GPU, no Blender, and no engine licence.
 
 ```bash
 cd web
-npm run verify       # typecheck + 162 tests + production build
+npm run verify       # typecheck + 206 tests + production build
 npm run smoke        # drive the built game in headless Chromium
 
 cd ..

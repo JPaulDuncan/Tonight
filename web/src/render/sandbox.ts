@@ -30,6 +30,7 @@ import {
 import { WorldCollision } from "./collision";
 import { Hud } from "./hud";
 import { ArtLibrary, buildPieceKey, type ArtRecord } from "./assets";
+import { poseFor } from "./pose";
 import { Heightfield, SANDBOX_TERRAIN, scatterProps, type ScatterPoint } from "./terrain";
 
 /** Where `npm run art` publishes the generated meshes. */
@@ -72,6 +73,12 @@ const CAMERA_CONVERGE = 10;
 /** Keeps the boom from burying the camera in a wall the player just built. */
 const CAMERA_MIN_BOOM = 0.6;
 
+/** Size of a loaded texture, for the debug hook. */
+function describeImage(texture: THREE.Texture | null): string | null {
+  const image = texture?.image as { width?: number; height?: number } | undefined;
+  return image?.width ? `${image.width}x${image.height}` : null;
+}
+
 /** Part roles the harvestable generators emit, mapped to their colours. */
 const PROP_PART_COLOURS: Readonly<Record<string, number>> = {
   Trunk: 0x6b4a2f,
@@ -111,6 +118,10 @@ export class Sandbox {
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
   private avatar!: THREE.Group;
+  private avatarJoints = new Map<string, THREE.Group>();
+  private distanceTravelled = 0;
+  private lastAvatarSpeed = 0;
+  private lastAvatarPosition = vec3();
   private editTiles: THREE.Mesh[] = [];
   private lastFrameMs = 0;
 
@@ -210,6 +221,31 @@ export class Sandbox {
     // in roughly the right place.
     (window as unknown as { __tonight?: unknown }).__tonight = {
       describePieces: () => this.describePieces(),
+      describeMaterials: () =>
+        Object.fromEntries(
+          [...this.materials].map(([key, material]) => [
+            key,
+            {
+              colour: `#${material.color.getHexString()}`,
+              map: describeImage(material.map),
+            },
+          ]),
+        ),
+      describeAvatar: () => ({
+        distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
+        grounded: this.motor.grounded,
+        joints: Object.fromEntries(
+          [...this.avatarJoints].map(([part, joint]) => [
+            part,
+            [joint.rotation.x, joint.rotation.y, joint.rotation.z].map(
+              (v) => Number(v.toFixed(4)),
+            ),
+          ]),
+        ),
+        bobY: Number((this.avatar.position.y - this.motor.position.y).toFixed(4)),
+        leanX: Number(this.avatar.rotation.x.toFixed(4)),
+        speed: Number(this.lastAvatarSpeed.toFixed(3)),
+      }),
       describeEdit: () => ({
         editing: this.editing ? { ...this.editing } : null,
         target: this.editTarget(),
@@ -294,13 +330,13 @@ export class Sandbox {
     const registry = blueprints();
 
     for (const point of scatterProps(this.field, { tree: 70, rock: 35 })) {
-      const object = this.propObject(point.kind, point.objectId);
+      const blueprintId = point.kind === "tree" ? "harvest.tree" : "harvest.rock";
+      const object = this.propObject(point.kind, point.objectId, blueprintId);
       object.position.set(point.x, point.y, point.z);
       object.rotation.y = point.yaw;
       object.scale.setScalar(point.scale);
       this.scene.add(object);
 
-      const blueprintId = point.kind === "tree" ? "harvest.tree" : "harvest.rock";
       this.props.push({
         point, object, blueprintId,
         state: harvestStateFor(point.objectId, registry.harvestable(blueprintId)),
@@ -320,29 +356,84 @@ export class Sandbox {
     const name = this.art.nameForKey("default");
     if (!name) throw new Error("No character mesh was loaded. Re-run: npm run art");
 
+    const character = blueprints().character("character.default");
+    const partTextures = character.partTextures ?? {};
+
     this.avatar = new THREE.Group();
+    this.avatarJoints = new Map();
+
     for (const part of this.art.partsOf(name)) {
       const material = new THREE.MeshLambertMaterial({
         color: CHARACTER_PART_COLOURS[part.group] ?? 0x8899aa,
+        map: this.art.texture(partTextures[part.group]) ?? null,
       });
       const mesh = new THREE.Mesh(part.geometry, material);
       mesh.castShadow = true;
-      this.avatar.add(mesh);
+
+      // A limb has to turn about its joint, not about the character's feet.
+      // The generator emits the joint (it knows where a hip is); the renderer
+      // just puts a node there and hangs the geometry off it, offset back by
+      // the same amount so the part does not move until it is rotated.
+      const pivot = part.pivot;
+      if (!pivot) {
+        this.avatar.add(mesh);
+        continue;
+      }
+
+      const joint = this.avatarJoints.get(part.group) ?? new THREE.Group();
+      if (!this.avatarJoints.has(part.group)) {
+        joint.position.set(pivot[0], pivot[1], pivot[2]);
+        this.avatarJoints.set(part.group, joint);
+        this.avatar.add(joint);
+      }
+      mesh.position.set(-pivot[0], -pivot[1], -pivot[2]);
+      joint.add(mesh);
     }
+
     this.scene.add(this.avatar);
   }
 
-  private updateAvatar(): void {
+  private updateAvatar(deltaSeconds: number): void {
+    const registry = blueprints();
+    const movement = registry.movement("movement.default");
+
+    // Ground distance, not time: the walk cycle is driven by how far the feet
+    // have actually travelled, which is what stops them skating when the speed
+    // changes. Vertical motion does not turn the legs over.
+    const dx = this.motor.position.x - this.lastAvatarPosition.x;
+    const dz = this.motor.position.z - this.lastAvatarPosition.z;
+    const stepped = Math.hypot(dx, dz);
+    this.distanceTravelled += stepped;
+    this.lastAvatarPosition = { ...this.motor.position };
+
+    // Speed comes from the *frame* delta, not the tick rate. This runs once
+    // per rendered frame and several simulation ticks may have happened inside
+    // it, so dividing by the tick interval overstates speed by the ratio of the
+    // two -- which pinned the lean at its cap at any frame rate below 30.
+    const speed = deltaSeconds > 1e-6 ? stepped / deltaSeconds : 0;
+    this.lastAvatarSpeed = speed;
+
+    const pose = poseFor(registry.locomotion("locomotion.default"), {
+      distanceTravelled: this.distanceTravelled,
+      speed,
+      airborne: !this.motor.grounded,
+      crouched: this.motor.crouched,
+    });
+
+    for (const [part, joint] of this.avatarJoints) {
+      const rotation = pose.rotations[part];
+      joint.rotation.set(rotation?.x ?? 0, rotation?.y ?? 0, rotation?.z ?? 0);
+    }
+
     // The mesh is authored based at Z=0 facing +Z, so the motor's position and
     // yaw drive it directly with no offset to get wrong.
     this.avatar.position.set(
-      this.motor.position.x, this.motor.position.y, this.motor.position.z,
+      this.motor.position.x, this.motor.position.y + pose.bob, this.motor.position.z,
     );
-    this.avatar.rotation.y = (this.motor.yaw * Math.PI) / 180;
+    this.avatar.rotation.set(pose.lean, (this.motor.yaw * Math.PI) / 180, 0, "YXZ");
 
     // Crouching squashes rather than swapping mesh: the capsule shrinks by the
     // same ratio, so the proxy stays inside the thing collision actually uses.
-    const movement = blueprints().movement("movement.default");
     const squash = this.motor.crouched ? movement.crouchHeight / movement.standHeight : 1;
     this.avatar.scale.set(1, squash, 1);
   }
@@ -428,7 +519,13 @@ export class Sandbox {
     let material = this.materials.get(materialId);
     if (!material) {
       const blueprint = blueprints().buildMaterial(materialId);
-      material = new THREE.MeshLambertMaterial({ color: new THREE.Color(blueprint.colour) });
+      // The texture is named by the Blueprint and tinted by its colour, so the
+      // two agree by construction: a wood texture under a stone tint would read
+      // as neither.
+      material = new THREE.MeshLambertMaterial({
+        color: new THREE.Color(blueprint.colour),
+        map: this.art.texture(blueprint.texture) ?? null,
+      });
       this.materials.set(materialId, material);
     }
     return material;
@@ -492,7 +589,7 @@ export class Sandbox {
    * separate glTF primitives tagged with their role, so the two-tone read
    * survives the move off procedural geometry.
    */
-  private propObject(kind: string, objectId: number): THREE.Object3D {
+  private propObject(kind: string, objectId: number, blueprintId: string): THREE.Object3D {
     const variants = this.art.keysUnder(`${kind}/`);
     if (variants.length === 0) {
       throw new Error(`No '${kind}' meshes were loaded. Re-run: npm run art`);
@@ -501,7 +598,7 @@ export class Sandbox {
 
     const group = new THREE.Group();
     for (const part of this.art.partsOf(name)) {
-      const mesh = new THREE.Mesh(part.geometry, this.propMaterial(part.group));
+      const mesh = new THREE.Mesh(part.geometry, this.propMaterial(blueprintId, part.group));
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       group.add(mesh);
@@ -509,12 +606,14 @@ export class Sandbox {
     return group;
   }
 
-  private propMaterial(partRole: string): THREE.MeshLambertMaterial {
-    const key = `prop:${partRole}`;
+  private propMaterial(blueprintId: string, partRole: string): THREE.MeshLambertMaterial {
+    const key = `prop:${blueprintId}:${partRole}`;
     let material = this.materials.get(key);
     if (!material) {
+      const textures = blueprints().harvestable(blueprintId).partTextures ?? {};
       material = new THREE.MeshLambertMaterial({
         color: PROP_PART_COLOURS[partRole] ?? 0x7a7a80,
+        map: this.art.texture(textures[partRole]) ?? null,
       });
       this.materials.set(key, material);
     }
@@ -650,7 +749,7 @@ export class Sandbox {
       this.simulate();
     }
 
-    this.updateAvatar();
+    this.updateAvatar(delta);
     this.updateCamera();
     this.paintEdit();
     this.updateEditOverlay();

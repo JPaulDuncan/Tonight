@@ -51,6 +51,24 @@ class ExportRecord:
     content_hash: str
 
 
+@dataclass
+class TextureRecord:
+    """One exported texture, as it appears in the manifest.
+
+    Separate from :class:`ExportRecord` rather than sharing it: an image has no
+    vertex count and no extent in metres, and a record with three fields that
+    are always zero invites someone to read them.
+    """
+
+    name: str
+    category: str
+    #: Path relative to the export root, e.g. ``Textures/T_Build_Wood.png``.
+    file: str
+    relative_path: str
+    size_pixels: int
+    content_hash: str
+
+
 def category_for(asset_name: str) -> str:
     """Infer the category from a conventional asset name.
 
@@ -132,7 +150,26 @@ def build_record(mesh: MeshData) -> ExportRecord:
     )
 
 
-def write_manifest(records: list[ExportRecord], path: Path) -> None:
+def build_texture_record(name: str, texture) -> TextureRecord:
+    """Build a manifest record for a texture."""
+    from tonight.textures import texture_path
+
+    relative = texture_path(name, EXPORT_ROOT).as_posix()
+    return TextureRecord(
+        name=name,
+        category=name.split("_")[1].lower(),
+        file=texture_path(name, Path(".")).as_posix(),
+        relative_path=relative,
+        size_pixels=texture.width,
+        content_hash=texture.content_hash(),
+    )
+
+
+def write_manifest(
+    records: list[ExportRecord],
+    path: Path,
+    textures: list[TextureRecord] | None = None,
+) -> None:
     """Write the asset manifest.
 
     The manifest is what makes a procedural pipeline reviewable: content hashes
@@ -142,11 +179,14 @@ def write_manifest(records: list[ExportRecord], path: Path) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
 
+    texture_records = textures or []
     payload = {
-        "version": 1,
+        "version": 2,
         "assetCount": len(records),
+        "textureCount": len(texture_records),
         # Sorted so the manifest diff reflects content changes, not dict order.
         "assets": [asdict(record) for record in sorted(records, key=lambda r: r.name)],
+        "textures": [asdict(record) for record in sorted(texture_records, key=lambda r: r.name)],
     }
 
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

@@ -131,6 +131,8 @@ export interface BuildMaterialBlueprint extends BlueprintBase {
   readonly costPerPiece: number;
   readonly maxCarried: number;
   readonly colour: string;
+  /** Texture asset name, e.g. `T_Build_Wood`. Tints by `colour`. */
+  readonly texture?: string;
 }
 
 /**
@@ -211,12 +213,63 @@ export interface HitboxDefinition {
   readonly damageScale: number;
 }
 
+/** Which local axis a part rotates about. */
+export type PoseAxis = "x" | "y" | "z";
+
+/** One part's contribution to the looping walk cycle. */
+export interface CycleTrack {
+  /** The part role the generator emits, e.g. `LegLeft`. */
+  readonly part: string;
+  readonly axis: PoseAxis;
+  readonly amplitudeDegrees: number;
+  /** Where in the cycle this part peaks, 0..1. Legs sit half a cycle apart. */
+  readonly phase: number;
+}
+
+/** A fixed rotation applied while a state holds. */
+export interface PoseTrack {
+  readonly part: string;
+  readonly axis: PoseAxis;
+  readonly degrees: number;
+}
+
+/**
+ * A walk cycle, authored as data.
+ *
+ * Hardcoding a sine wave per limb in TypeScript would be exactly the thing
+ * CLAUDE.md's one rule forbids: retiming the walk, or giving a future character
+ * a different gait, would be a code change. It is a Blueprint instead.
+ */
+export interface LocomotionBlueprint extends BlueprintBase {
+  /**
+   * Metres of travel per full cycle.
+   *
+   * The phase advances with **distance**, not time, so the feet keep pace with
+   * the ground however fast the player is going. Driving it from a clock is
+   * what makes a character skate.
+   */
+  readonly strideMetres: number;
+  /** Vertical bob at the peak of each step. */
+  readonly bobMetres: number;
+  /** Forward lean per m/s of speed, so a sprint reads as effort. */
+  readonly leanDegreesPerMetrePerSecond: number;
+  readonly maxLeanDegrees: number;
+  /** Speed at which the cycle reaches full amplitude, so a creep does not flail. */
+  readonly blendInMetresPerSecond: number;
+  readonly cycle: readonly CycleTrack[];
+  readonly airborne: readonly PoseTrack[];
+  readonly crouched: readonly PoseTrack[];
+}
+
 export interface CharacterBlueprint extends BlueprintBase {
   readonly movementId: string;
   readonly maxHealth: number;
   readonly maxShield: number;
   readonly cameraHeight: number;
   readonly hitboxes: readonly HitboxDefinition[];
+  readonly locomotionId: string;
+  /** Texture asset name per part role, keyed as the generator names them. */
+  readonly partTextures?: Readonly<Record<string, string>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +336,8 @@ export interface HarvestableBlueprint extends BlueprintBase {
   readonly yieldOnDestroy: number;
   /** -1 = never respawns, the match-long default. */
   readonly respawnSeconds: number;
+  /** Texture asset name per part role, e.g. `{ Trunk: "T_Harvest_Bark" }`. */
+  readonly partTextures?: Readonly<Record<string, string>>;
 }
 
 export type PoiTier = "major" | "minor" | "landmark";
@@ -320,6 +375,7 @@ export interface BlueprintLibrary {
   readonly lootTables: readonly LootTableBlueprint[];
   readonly movement: readonly MovementBlueprint[];
   readonly characters: readonly CharacterBlueprint[];
+  readonly locomotion: readonly LocomotionBlueprint[];
   readonly stormPhases: readonly StormPhaseBlueprint[];
   readonly lighting: readonly MatchLightingBlueprint[];
   readonly matchRules: readonly MatchRulesBlueprint[];

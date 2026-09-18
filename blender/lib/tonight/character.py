@@ -125,7 +125,23 @@ def character(proportions: CharacterProportions = DEFAULT) -> MeshData:
             )
         )
 
-    return MeshData.join(parts, name=name)
+    mesh = MeshData.join(parts, name=name)
+
+    # Joints, in Blender coordinates. A limb rotates about the top of itself:
+    # the hip is where the leg meets the pelvis, the shoulder where the arm
+    # meets the chest. Emitting them here rather than deriving them in the
+    # renderer keeps anatomy in the generator that already knows it.
+    mesh.pivots = {
+        "LegLeft": (-(leg_width / 2.0 + leg_gap / 2.0), 0.0, leg_top),
+        "LegRight": (leg_width / 2.0 + leg_gap / 2.0, 0.0, leg_top),
+        "ArmLeft": (-(width / 2.0 + arm_width / 2.0), 0.0, leg_top + torso_height),
+        "ArmRight": (width / 2.0 + arm_width / 2.0, 0.0, leg_top + torso_height),
+        # The torso leans and the head turns about the base of each.
+        "Chest": (0.0, 0.0, leg_top + torso_height * 0.38),
+        "Head": (0.0, 0.0, neck),
+        "Pelvis": (0.0, 0.0, leg_top),
+    }
+    return mesh
 
 
 def generate_all() -> dict[str, MeshData]:

@@ -53,6 +53,13 @@ class MeshData:
     #: name", which is the common case for a mesh built directly.
     face_groups: list[str] = field(default_factory=list)
 
+    #: Rotation pivot per part role, in Blender coordinates. Only meshes meant
+    #: to articulate set these -- a character's hips and shoulders. The
+    #: generator knows where a joint is; the renderer would have to guess it
+    #: from a bounding box and a rule keyed to part names, which is the
+    #: behaviour-from-content anti-pattern in miniature.
+    pivots: dict[str, Vec3] = field(default_factory=dict)
+
     # ---------------------------------------------------------------- basics
 
     @property
@@ -131,6 +138,7 @@ class MeshData:
             uvs=[list(face_uvs) for face_uvs in self.uvs],
             name=self.name,
             face_groups=list(self.face_groups),
+            pivots=dict(self.pivots),
         )
 
     # ----------------------------------------------------------------- merge
@@ -152,6 +160,7 @@ class MeshData:
         result.face_groups.extend(
             other.face_groups if other.face_groups else [other.name] * len(other.faces)
         )
+        result.pivots.update(other.pivots)
         return result
 
     @staticmethod

@@ -40,10 +40,11 @@ def _repo_root() -> Path:
 
 sys.path.insert(0, str(_repo_root() / "blender" / "lib"))
 
-from tonight import build_pieces, character, harvestables, terrain, weapons  # noqa: E402
+from tonight import build_pieces, character, harvestables, terrain, textures, weapons  # noqa: E402
 from tonight.export import (  # noqa: E402
     EXPORT_ROOT,
     build_record,
+    build_texture_record,
     check_before_export,
     export_path,
     write_manifest,
@@ -135,28 +136,40 @@ def main(argv: list[str]) -> int:
     # Records carry repo-relative paths regardless of where meshes are written.
     records = [build_record(mesh) for mesh in meshes.values()]
 
+    # Textures are generated whenever meshes are, because a mesh without its
+    # surface is half an asset and the two drift the moment they are separate
+    # commands.
+    tiles = textures.generate_all()
+    texture_records = [build_texture_record(name, tile) for name, tile in tiles.items()]
+
     if not args.dry_run:
         for mesh in meshes.values():
             destination = export_path(mesh.name, out_root)
             write_glb(mesh, destination)
-        print(f"[tonight] Wrote {len(meshes)} .glb files under {out_root}.")
+        for name, tile in tiles.items():
+            tile.write(textures.texture_path(name, out_root))
+        print(
+            f"[tonight] Wrote {len(meshes)} .glb and {len(tiles)} .png files "
+            f"under {out_root}."
+        )
 
     # The canonical manifest is committed and reviewed; it is how a generator
     # change is read (ADR-0004).
     manifest_path = root / "blender" / "exports" / "manifest.json"
-    write_manifest(records, manifest_path)
+    write_manifest(records, manifest_path, texture_records)
 
     # A copy beside the meshes makes an export directory self-describing, so
     # the web client fetches its index from the same place as its assets
     # instead of reaching across the repo for it.
     if not args.dry_run and out_root.resolve() != manifest_path.parent.resolve():
-        write_manifest(records, out_root / "manifest.json")
+        write_manifest(records, out_root / "manifest.json", texture_records)
 
     total_tris = sum(mesh.triangle_count for mesh in meshes.values())
     elapsed = time.perf_counter() - started
     mode = "dry run" if args.dry_run else "exported"
     print(
-        f"[tonight] {mode}: {len(records)} assets, {total_tris} triangles, "
+        f"[tonight] {mode}: {len(records)} assets, {len(texture_records)} textures, "
+        f"{total_tris} triangles, "
         f"{elapsed:.2f}s. Manifest at {manifest_path.relative_to(root)}."
     )
     return 0

@@ -22,7 +22,9 @@ import type {
   ConsumableBlueprint,
   DamageProfileBlueprint,
   HarvestableBlueprint,
+  CycleTrack,
   ItemBlueprint,
+  LocomotionBlueprint,
   LootTableBlueprint,
   MapBlueprint,
   MatchLightingBlueprint,
@@ -90,6 +92,7 @@ export class BlueprintRegistry {
   lootTable(id: string): LootTableBlueprint { return this.get<LootTableBlueprint>(id); }
   movement(id: string): MovementBlueprint { return this.get<MovementBlueprint>(id); }
   character(id: string): CharacterBlueprint { return this.get<CharacterBlueprint>(id); }
+  locomotion(id: string): LocomotionBlueprint { return this.get<LocomotionBlueprint>(id); }
   stormPhase(id: string): StormPhaseBlueprint { return this.get<StormPhaseBlueprint>(id); }
   lighting(id: string): MatchLightingBlueprint { return this.get<MatchLightingBlueprint>(id); }
   matchRules(id: string): MatchRulesBlueprint { return this.get<MatchRulesBlueprint>(id); }
@@ -295,9 +298,71 @@ export function validateLibrary(library: BlueprintLibrary): Finding[] {
     const heads = c.hitboxes.filter((h) => h.isHead).length;
     if (heads !== 1) error(`Character must have exactly one head hitbox; found ${heads}.`, c.id);
     requireRef(c.movementId, c.id, "movementId");
+    requireRef(c.locomotionId, c.id, "locomotionId");
+
+    // Every animated part must be a real hitbox: the generator names its parts
+    // after them, so a typo here animates nothing and says nothing.
+    const parts = new Set(c.hitboxes.map((h) => h.name));
+    const locomotion = library.locomotion.find((l) => l.id === c.locomotionId);
+    if (locomotion) {
+      const tracks = [...locomotion.cycle, ...locomotion.airborne, ...locomotion.crouched];
+      for (const track of tracks) {
+        if (!parts.has(track.part)) {
+          error(
+            `Locomotion drives '${track.part}', which is not one of this character's parts.`,
+            c.id,
+          );
+        }
+      }
+    }
+    for (const part of Object.keys(c.partTextures ?? {})) {
+      if (!parts.has(part)) {
+        error(`partTextures names '${part}', which is not one of this character's parts.`, c.id);
+      }
+    }
     const movement = library.movement.find((m) => m.id === c.movementId);
     if (movement && c.cameraHeight >= movement.standHeight) {
       error("cameraHeight must be below the standing capsule height.", c.id);
+    }
+  }
+
+  // --- locomotion ---------------------------------------------------------
+  //
+  // A walk cycle is content, so a broken one has to fail here rather than as a
+  // character standing rigid or spinning a limb through its own torso.
+  for (const l of library.locomotion) {
+    if (l.strideMetres <= 0) {
+      error("strideMetres must be positive; the phase is driven by distance.", l.id);
+    }
+    if (l.blendInMetresPerSecond <= 0) {
+      error("blendInMetresPerSecond must be positive, or the cycle never blends in.", l.id);
+    }
+    if (l.cycle.length === 0) error("A locomotion blueprint with no cycle animates nothing.", l.id);
+
+    const seenTracks = new Set<string>();
+    for (const track of l.cycle) {
+      const key = `${track.part}:${track.axis}`;
+      if (seenTracks.has(key)) {
+        error(`Two cycle tracks drive ${key}; only the last would be visible.`, l.id);
+      }
+      seenTracks.add(key);
+      if (track.phase < 0 || track.phase >= 1) {
+        error(`Track ${key} has phase ${track.phase}; phases are within [0, 1).`, l.id);
+      }
+      if (Math.abs(track.amplitudeDegrees) > 90) {
+        warn(`Track ${key} swings ${track.amplitudeDegrees} degrees, past a limb's range.`, l.id);
+      }
+    }
+
+    // Legs that swing together is a hop, not a walk. Catching it here beats
+    // catching it by watching the character.
+    const legs = l.cycle.filter((t) => t.part.startsWith("Leg"));
+    if (legs.length === 2) {
+      const [a, b] = legs as [CycleTrack, CycleTrack];
+      const separation = Math.abs(a.phase - b.phase);
+      if (Math.min(separation, 1 - separation) < 0.2) {
+        warn("The two legs are nearly in phase, which reads as a hop.", l.id);
+      }
     }
   }
 
