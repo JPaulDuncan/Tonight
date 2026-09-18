@@ -1,0 +1,61 @@
+{
+  "consumables": [
+    { "id": "consumable.bandage", "displayName": "Bandage", "kind": "consumable",
+      "tags": ["consumable"], "maxStack": 5,
+      "description": "Caps at 75 health. The cap is what makes this a decision, not a duration.",
+      "healthRestored": 15, "shieldRestored": 0, "healthCap": 75,
+      "useSeconds": 3, "consumedOnUse": true, "cancelOnDamage": true },
+    { "id": "consumable.medkit", "displayName": "Med Kit", "kind": "consumable",
+      "tags": ["consumable"], "maxStack": 3,
+      "healthRestored": 100, "shieldRestored": 0, "healthCap": 100,
+      "useSeconds": 10, "consumedOnUse": true, "cancelOnDamage": true },
+    { "id": "consumable.miniShield", "displayName": "Small Shield Potion", "kind": "consumable",
+      "tags": ["consumable"], "maxStack": 6,
+      "healthRestored": 0, "shieldRestored": 25, "healthCap": 100,
+      "useSeconds": 2, "consumedOnUse": true, "cancelOnDamage": true },
+    { "id": "consumable.bigShield", "displayName": "Shield Potion", "kind": "consumable",
+      "tags": ["consumable"], "maxStack": 2,
+      "healthRestored": 0, "shieldRestored": 50, "healthCap": 100,
+      "useSeconds": 5, "consumedOnUse": true, "cancelOnDamage": true }
+  ],
+  "lootTables": [
+    { "id": "loot.weapons", "displayName": "Weapon pool",
+      "rollCount": { "min": 1, "max": 1 }, "allowDuplicates": true, "rarityBias": 0,
+      "entries": [
+        { "kind": "item", "itemId": "weapon.assaultRifle", "weight": 30, "countRange": { "min": 1, "max": 1 } },
+        { "kind": "item", "itemId": "weapon.shotgun", "weight": 24, "countRange": { "min": 1, "max": 1 } },
+        { "kind": "item", "itemId": "weapon.smg", "weight": 22, "countRange": { "min": 1, "max": 1 } },
+        { "kind": "item", "itemId": "weapon.pistol", "weight": 16, "countRange": { "min": 1, "max": 1 } },
+        { "kind": "item", "itemId": "weapon.sniper", "weight": 8, "countRange": { "min": 1, "max": 1 } }
+      ] },
+    { "id": "loot.consumables", "displayName": "Consumable pool",
+      "rollCount": { "min": 1, "max": 1 }, "allowDuplicates": true, "rarityBias": 0,
+      "entries": [
+        { "kind": "item", "itemId": "consumable.bandage", "weight": 34, "countRange": { "min": 3, "max": 5 } },
+        { "kind": "item", "itemId": "consumable.miniShield", "weight": 30, "countRange": { "min": 2, "max": 3 } },
+        { "kind": "item", "itemId": "consumable.medkit", "weight": 18, "countRange": { "min": 1, "max": 1 } },
+        { "kind": "item", "itemId": "consumable.bigShield", "weight": 18, "countRange": { "min": 1, "max": 2 } }
+      ] },
+    { "id": "loot.floor", "displayName": "Floor loot",
+      "rollCount": { "min": 1, "max": 1 }, "allowDuplicates": true, "rarityBias": 0,
+      "entries": [
+        { "kind": "table", "tableId": "loot.weapons", "weight": 45, "countRange": { "min": 1, "max": 1 } },
+        { "kind": "table", "tableId": "loot.consumables", "weight": 40, "countRange": { "min": 1, "max": 1 } },
+        { "kind": "nothing", "weight": 15, "countRange": { "min": 1, "max": 1 } }
+      ] },
+    { "id": "loot.chest", "displayName": "Chest",
+      "description": "Composed from the shared pools, and shifts rarity up one tier.",
+      "rollCount": { "min": 2, "max": 3 }, "allowDuplicates": false, "rarityBias": 1,
+      "entries": [
+        { "kind": "table", "tableId": "loot.weapons", "weight": 55, "countRange": { "min": 1, "max": 1 } },
+        { "kind": "table", "tableId": "loot.consumables", "weight": 45, "countRange": { "min": 1, "max": 1 } }
+      ] },
+    { "id": "loot.supplyDrop", "displayName": "Supply drop",
+      "rollCount": { "min": 3, "max": 4 }, "allowDuplicates": false, "rarityBias": 3,
+      "entries": [
+        { "kind": "table", "tableId": "loot.weapons", "weight": 60,
+          "countRange": { "min": 1, "max": 1 }, "rarityOverrideId": "rarity.legendary" },
+        { "kind": "table", "tableId": "loot.consumables", "weight": 40, "countRange": { "min": 1, "max": 1 } }
+      ] }
+  ]
+}

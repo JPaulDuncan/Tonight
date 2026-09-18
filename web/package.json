@@ -1,0 +1,25 @@
+{
+  "name": "tonight",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Tonight - a browser battle royale in three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.1",
+    "@types/three": "^0.186.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}

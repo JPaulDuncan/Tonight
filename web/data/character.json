@@ -1,0 +1,26 @@
+{
+  "movement": [
+    { "id": "movement.default", "displayName": "Default movement",
+      "description": "No slide, no dash, no double jump. Every movement verb competes with building for the skill ceiling, and building is the pillar.",
+      "walkSpeed": 4.6, "sprintSpeed": 7.4, "crouchSpeed": 2.3,
+      "acceleration": 60, "deceleration": 45, "airControl": 0.35,
+      "jumpHeight": 1.1, "gravity": -22, "terminalVelocity": 55,
+      "fallDamageThreshold": 3.5, "fallDamagePerMetre": 10,
+      "mantleMaxHeight": 1.6, "mantleSeconds": 0.4,
+      "standHeight": 1.8, "crouchHeight": 0.9 }
+  ],
+  "characters": [
+    { "id": "character.default", "displayName": "Default character",
+      "movementId": "movement.default",
+      "maxHealth": 100, "maxShield": 100, "cameraHeight": 1.65,
+      "hitboxes": [
+        { "name": "Head", "isHead": true, "damageScale": 1 },
+        { "name": "Chest", "isHead": false, "damageScale": 1 },
+        { "name": "Pelvis", "isHead": false, "damageScale": 1 },
+        { "name": "ArmLeft", "isHead": false, "damageScale": 0.85 },
+        { "name": "ArmRight", "isHead": false, "damageScale": 0.85 },
+        { "name": "LegLeft", "isHead": false, "damageScale": 0.85 },
+        { "name": "LegRight", "isHead": false, "damageScale": 0.85 }
+      ] }
+  ]
+}
