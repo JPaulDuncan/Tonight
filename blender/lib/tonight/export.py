@@ -30,6 +30,7 @@ CATEGORY_FOLDERS = {
     "harvest": "Harvestables",
     "tool": "Weapons",
     "terrain": "Terrain",
+    "character": "Characters",
 }
 
 

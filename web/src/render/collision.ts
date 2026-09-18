@@ -113,7 +113,7 @@ export class WorldCollision implements MotorCollision {
   groundHeightAt(x: number, z: number, feetY: number): number {
     let best = this.field.sample(x, z);
 
-    for (const piece of this.piecesNear(x, z)) {
+    for (const piece of this.piecesNear(x, feetY, z)) {
       const height = surfaceHeight(piece, x, z);
       // Only surfaces at or below the feet (plus a step) can support us, or a
       // floor above the player's head would yank them upward.
@@ -169,7 +169,7 @@ export class WorldCollision implements MotorCollision {
     const minY = y + 0.05;
     const maxY = y + Math.max(0.05, capsuleHeight);
 
-    for (const piece of this.piecesNear(x, z)) {
+    for (const piece of this.piecesNear(x, y, z)) {
       const box = wallBox(piece.cell, piece.slot);
       if (!box) continue;
       if (maxY <= box.minY || minY >= box.maxY) continue;
@@ -183,9 +183,18 @@ export class WorldCollision implements MotorCollision {
     return false;
   }
 
-  /** Pieces in the 3x3x3 cell neighbourhood of a position. */
-  private *piecesNear(x: number, z: number): Generator<PlacedPiece> {
-    const centre = worldToCell(x, 0, z);
+  /**
+   * Pieces in the cell neighbourhood of a position.
+   *
+   * The vertical centre is the caller's `y`. It used to be a hardcoded zero,
+   * which silently capped collision at the cells within two of the world
+   * origin: build a tower past about 12 m and the player walked through their
+   * own walls and fell through their own floors. It never showed up because the
+   * sandbox terrain sits at 6-8 m, leaving barely one cell of headroom inside
+   * the window.
+   */
+  private *piecesNear(x: number, y: number, z: number): Generator<PlacedPiece> {
+    const centre = worldToCell(x, y, z);
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {
         for (let dy = -2; dy <= 2; dy++) {
@@ -222,6 +231,40 @@ export class WorldCollision implements MotorCollision {
 
   hasHeadroom(position: Vec3, standHeight: number, capsuleRadius: number): boolean {
     return !this.overlapsWall(position.x, position.y, position.z, standHeight, capsuleRadius * 0.95);
+  }
+
+  /**
+   * Is this point inside a wall, a floor slab, or under the terrain?
+   *
+   * Used by the third-person camera boom, not by movement: the player capsule
+   * needs a swept resolve, but a camera only needs to know whether a candidate
+   * position is somewhere it must not sit. Cheap enough to sample along a boom
+   * every frame.
+   */
+  isInsideSolid(x: number, y: number, z: number): boolean {
+    if (y <= this.field.sample(x, z)) return true;
+
+    for (const piece of this.piecesNear(x, y, z)) {
+      const box = wallBox(piece.cell, piece.slot);
+      if (box) {
+        if (
+          x > box.minX && x < box.maxX &&
+          y > box.minY && y < box.maxY &&
+          z > box.minZ && z < box.maxZ
+        ) {
+          return true;
+        }
+        continue;
+      }
+      // Floors, ramps and cones are height queries rather than boxes, so
+      // "inside" means below the surface they present and within their cell.
+      const surface = surfaceHeight(piece, x, z);
+      const base = cellToWorld(piece.cell);
+      if (surface !== undefined && y < surface && y > base.y - SLAB_HALF_THICKNESS) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Does this cell intersect terrain? Used as the build system's ground test. */

@@ -13,7 +13,7 @@ import struct
 
 import pytest
 
-from tonight import build_pieces, harvestables, terrain, units, weapons
+from tonight import build_pieces, character, harvestables, terrain, units, weapons
 from tonight.gltf import (
     COMPONENT_FLOAT,
     COMPONENT_UINT32,
@@ -84,9 +84,22 @@ def dot(a, b):
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
+def _parts_by_name(mesh: MeshData) -> dict[str, list[int]]:
+    """Face indices grouped by the generator's raw part name.
+
+    Unlike ``primitive_groups`` this keeps the instance suffix, which is what
+    makes ``Cell_0`` distinguishable from ``Cell_8``.
+    """
+    grouped: dict[str, list[int]] = {}
+    for index in range(len(mesh.faces)):
+        key = mesh.face_groups[index] if index < len(mesh.face_groups) else mesh.name
+        grouped.setdefault(key, []).append(index)
+    return grouped
+
+
 def every_generated_mesh() -> dict[str, MeshData]:
     meshes: dict[str, MeshData] = {}
-    for module in (build_pieces, harvestables, weapons, terrain):
+    for module in (build_pieces, character, harvestables, weapons, terrain):
         meshes.update(module.generate_all())
     return meshes
 
@@ -241,6 +254,85 @@ class TestOrientation:
         apex = [p for p in positions if p[1] > peak - 0.01]
         for point in apex:
             assert abs(point[0]) < 0.01 and abs(point[2]) < 0.01
+
+    def test_edit_mask_index_zero_is_the_top_left_cell(self):
+        """Which corner a mask bit refers to.
+
+        The renderer resolves a click to a sub-cell with ``subCellIndex``, which
+        puts index 0 at the top-left with columns running along increasing world
+        X. The generator has to agree, or an asymmetric edit comes out mirrored
+        or upside down. Both shipped masks -- doorway and window -- are
+        horizontally symmetric, so nothing in the game would reveal a mirrored
+        column mapping; this uses an asymmetric mask on purpose.
+        """
+        cleared_top_left = (False,) + (True,) * 8
+        mesh = build_pieces.wall_variant(build_pieces.WOOD, cleared_top_left, "Probe")
+
+        # Group vertices by the part each face belongs to, then place each
+        # part by its own centre. Proximity to a third's centre does not work:
+        # a box has vertices only at its corners, which sit on the boundary it
+        # shares with its neighbour.
+        third = units.WALL_WIDTH / 3.0
+        occupied: set[tuple[int, int]] = set()
+        for part_name, face_indices in _parts_by_name(mesh).items():
+            xs = [mesh.vertices[i][0] for f in face_indices for i in mesh.faces[f]]
+            zs = [mesh.vertices[i][2] for f in face_indices for i in mesh.faces[f]]
+            centre_x = (min(xs) + max(xs)) / 2.0
+            centre_z = (min(zs) + max(zs)) / 2.0
+            column = int((centre_x + units.WALL_WIDTH / 2.0) // third)
+            row_from_bottom = int(centre_z // third)
+            occupied.add((column, row_from_bottom))
+            assert part_name.startswith("Cell_")
+
+        # Index 0 cleared means the TOP (row 2 from the bottom) LEFT (column 0,
+        # the low-X side) is the hole, and nothing else is.
+        assert (0, 2) not in occupied, "index 0 should clear the top-left cell"
+        assert (2, 2) in occupied, "the top-right cell should remain"
+        assert (0, 0) in occupied, "the bottom-left cell should remain"
+        assert len(occupied) == 8, f"expected exactly one hole, got {9 - len(occupied)}"
+
+    def test_character_faces_positive_gltf_z(self):
+        """The direction yaw zero points.
+
+        The motor's forward is ``yawRotate(vec3(0, 0, 1), yaw)``, so yaw zero is
+        glTF +Z, which is Blender -Y. A character authored facing the other way
+        runs backwards, and the third-person camera -- which sits behind the
+        player along -forward -- ends up staring at its face.
+
+        The brow block is the asymmetry that makes this checkable at all: a
+        symmetric box figure has no detectable facing.
+        """
+        mesh = character.generate_all()["SM_Character_Default"]
+        positions = [to_gltf_position(v) for v in mesh.vertices]
+
+        # Head height, so the brow is the only thing this far forward.
+        head = [p for p in positions if p[1] > mesh.bounds()[1][2] - 0.25]
+        assert max(p[2] for p in head) > abs(min(p[2] for p in head)), (
+            "the head's forward detail should sit at +Z"
+        )
+
+    def test_character_matches_the_blueprint_height(self):
+        mesh = character.generate_all()["SM_Character_Default"]
+        low, high = mesh.bounds()
+        assert low[2] == pytest.approx(0.0), "a character must stand on Z=0"
+        assert high[2] == pytest.approx(units.CHARACTER_HEIGHT, abs=1e-6)
+
+    def test_character_parts_are_named_for_their_hitboxes(self):
+        # CharacterBlueprint.hitboxes names these; the client tints a limb on
+        # hit by matching the primitive's group, so a rename must not drift.
+        mesh = character.generate_all()["SM_Character_Default"]
+        groups = {name for name, _ in mesh.primitive_groups()}
+        assert groups == {
+            "Head", "Chest", "Pelvis", "ArmLeft", "ArmRight", "LegLeft", "LegRight",
+        }
+
+    def test_character_fits_through_a_doorway_edit(self):
+        # The doorway mask removes the middle and bottom-middle of a 3x3 face,
+        # so the gap is a third of the cell. A proxy wider than that cannot walk
+        # through its own edits, which would make the edit system unusable.
+        mesh = character.generate_all()["SM_Character_Default"]
+        width = mesh.size()[0]
+        assert width < units.CELL_SIZE / 3.0
 
     def test_pieces_are_authored_with_their_base_at_the_cell_floor(self):
         """The origin convention the renderer places against.

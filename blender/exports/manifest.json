@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetCount": 34,
+  "assetCount": 35,
   "assets": [
     {
       "name": "SM_Build_Cone_Metal",
@@ -253,6 +253,20 @@
         4.0
       ],
       "content_hash": "7969a75764ca5f33"
+    },
+    {
+      "name": "SM_Character_Default",
+      "category": "character",
+      "file": "Characters/SM_Character_Default.glb",
+      "relative_path": "blender/exports/Characters/SM_Character_Default.glb",
+      "vertex_count": 64,
+      "triangle_count": 96,
+      "size_metres": [
+        0.7072,
+        0.2774,
+        1.8
+      ],
+      "content_hash": "47ba8be44e3137d9"
     },
     {
       "name": "SM_Harvest_Rock_00",

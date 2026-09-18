@@ -120,8 +120,8 @@ Weapons, damage, loot. Still single-player, against dummies.
 - [~] Inventory: slots, stacking and ammo counters are ported from the Unity
       version but not yet re-tested or wired to the sandbox.
 - [ ] Damage numbers and hit markers.
-- [ ] Edit variants render. The doorway and window meshes export and the lookup
-      reaches them; the renderer still draws the solid piece after an edit.
+- [x] Edit variants render, and editing is wired to input: hold, drag a 3x3
+      selection, release. The doorway mesh loads and the HUD names the variant.
 - [ ] Weapons usable in the sandbox — the firing code has no trigger bound to it
       yet, so combat is tested but not playable.
 - [x] **A new weapon needs one JSON entry and one mesh.**
@@ -225,16 +225,19 @@ networking, no other players, and no match flow.
 
 The next tasks, in order:
 
-1. Bind weapons to the sandbox — fire, reload, hit structures. Combat is already
+1. Animate the character. Third person makes this visible in a way first person
+   did not: the proxy currently slides. It is the largest remaining gap between
+   how the game reads and how it plays.
+2. Bind weapons to the sandbox — fire, reload, hit structures. Combat is already
    tested, so this is wiring rather than design.
-2. Run the storm live in the sandbox with the night-clock lighting arc driving
+3. Run the storm live in the sandbox with the night-clock lighting arc driving
    the scene. The director works; the renderer ignores it.
-3. Re-port inventory, squads and match flow from the Unity branch. The logic is
+4. Re-port inventory, squads and match flow from the Unity branch. The logic is
    written and was reviewed; it needs translating and re-testing.
-4. Instanced rendering for build pieces, then measure. This is the gate — and
+5. Instanced rendering for build pieces, then measure. This is the gate — and
    now measurable against the real meshes rather than against boxes, which
    matters because a generated wall is 408 vertices where a box was 24.
-5. Only then the authoritative server.
+6. Only then the authoritative server.
 
 ## Honest risks
 
@@ -243,7 +246,7 @@ The next tasks, in order:
 | WebGL at scale | The reason for the rescope. Thousands of build pieces plus 30 players needs instancing and culling that Unity gave us for free. Unmeasured. |
 | No networking yet | The largest unbuilt piece. The simulation is shaped for it — commands, determinism, shared validation — but shaped-for is not built. |
 | Collision is bespoke | Exact for axis-aligned pieces on a known grid, and deliberately limited beyond that. Terrain edge cases will surface. |
-| Art is bound, but thin | The client loads the generated glTF and the pipeline is covered end to end. What it loads is still stylised blocking geometry with no textures or materials, and no animation exists at all. |
+| Art is bound, but thin | The client loads the generated glTF and the pipeline is covered end to end. What it loads is still stylised blocking geometry with no textures or materials. The player character is a blocky proxy and nothing is animated, so a third-person view shows a figure that slides rather than walks. |
 | Sandbox is not a match | Everything above M2 is tested in isolation, not in a running game. |
 
 ## Not scheduled

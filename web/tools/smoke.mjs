@@ -91,6 +91,81 @@ if (afterReset !== 0) errors.push(`reset left ${afterReset} pieces`);
 await page.mouse.click(640, 360);
 await page.waitForTimeout(400);
 
+// Swap back to a wall and put one directly ahead, so the edit phase below has a
+// known piece under the crosshair rather than whatever the box-building left.
+await page.keyboard.press("KeyR");
+await page.waitForTimeout(300);
+await page.keyboard.press("Digit1");
+await page.waitForTimeout(150);
+await page.mouse.click(640, 360);
+await page.waitForTimeout(400);
+
+// Edit the wall in front of us into a doorway.
+//
+// The crosshair is nudged until it sits on the sub-cell we want rather than
+// assuming a pixels-per-degree mapping: the point is to prove the whole chain
+// -- aim, toggle, commit, load the variant mesh -- not to hard-code a mouse
+// path that breaks the first time the field of view changes.
+const subCellNow = () =>
+  page.evaluate(() => window.__tonight?.describeEdit?.().target ?? { found: false });
+
+// Playwright's mouse.move takes absolute page coordinates, but a pointer-locked
+// game reads the *delta* between them. Tracking our own cursor is what makes a
+// nudge repeatable; moving to the same absolute point twice sends a delta of
+// zero and the aim never budges.
+let cursorX = 640;
+let cursorY = 360;
+async function nudge(dx, dy) {
+  cursorX += dx;
+  cursorY += dy;
+  await page.mouse.move(cursorX, cursorY, { steps: 2 });
+  await page.waitForTimeout(70);
+}
+
+async function aimAtSubCell(wanted) {
+  // One sub-cell is 1.33 m across a wall 8 m away, so roughly ten degrees of
+  // view: small steps. Losing the face means the last nudge went off the top or
+  // the side, so ease back up and try again.
+  const STEP = 3;
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const target = await subCellNow();
+    if (target.found && target.subCell === wanted) return true;
+    if (!target.found) {
+      await nudge(0, -2);
+      continue;
+    }
+    const dColumn = (wanted % 3) - (target.subCell % 3);
+    const dRow = Math.floor(wanted / 3) - Math.floor(target.subCell / 3);
+    // Right on screen is +x; screen y and row index both grow downward.
+    await nudge(Math.sign(dColumn) * STEP, Math.sign(dRow) * STEP);
+  }
+  return false;
+}
+
+// A doorway clears the middle (4) and bottom-middle (7) cells.
+const DOORWAY_CELLS = [4, 7];
+let editOk = await aimAtSubCell(DOORWAY_CELLS[0]);
+if (!editOk) errors.push("could not aim at the wall to edit it");
+
+if (editOk) {
+  await page.keyboard.down("KeyG");      // begin: toggles the cell under the crosshair
+  await page.waitForTimeout(150);
+  editOk = await aimAtSubCell(DOORWAY_CELLS[1]);   // sweep: toggles the second
+  await page.waitForTimeout(150);
+  await page.keyboard.up("KeyG");        // release: applies
+  await page.waitForTimeout(400);
+
+  const edited = await page.evaluate(() => window.__tonight?.describePieces?.() ?? []);
+  const wall = edited.find((p) => p.key.endsWith(":0"));
+  console.log("edited wall:", JSON.stringify(wall));
+  // The doorway mesh is two of nine cells lighter than the solid wall, so the
+  // vertex count is the proof that the *variant* mesh is what loaded.
+  if (!wall) errors.push("the wall vanished during the edit");
+  else if (wall.vertices >= 408) {
+    errors.push(`edit did not change the mesh (${wall.vertices} vertices, solid is 408)`);
+  }
+}
+
 // The assets actually loaded, and landed where the grid says they should.
 const pieces = await page.evaluate(() => window.__tonight?.describePieces?.() ?? []);
 console.log("placed pieces:", JSON.stringify(pieces, null, 1));

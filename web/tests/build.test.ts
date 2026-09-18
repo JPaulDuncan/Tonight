@@ -15,6 +15,7 @@ import {
   UNSUPPORTED,
   nearestPointInCell,
   healthAtAge,
+  resolveEditTarget,
   placementTransform,
   resolvePlacement,
   stepCell,
@@ -568,5 +569,95 @@ describe("health ramp", () => {
     expect(metal.buildTimeSeconds).toBeGreaterThan(wood.buildTimeSeconds);
     // But they start equal, so a fresh piece is equally killable whatever it is.
     expect(metal.buildHealth).toBe(wood.buildHealth);
+  });
+});
+
+describe("edit targeting", () => {
+  let structure: BuildStructure;
+
+  const wallAt = (x: number, y: number, z: number, slot: BuildSlot) => ({
+    cell: cell(x, y, z), slot, pieceId: "piece.wall", materialId: "material.wood",
+    ownerId: 1, placedTick: 0, damageTaken: 0, editMask: SOLID_MASK,
+  });
+
+  beforeEach(() => {
+    structure = new BuildStructure((c) => c.y === 0);
+  });
+
+  it("finds nothing when there is no piece", () => {
+    expect(resolveEditTarget(vec3(2, 2, 2), vec3(0, 0, 1), structure).found).toBe(false);
+  });
+
+  it("finds a wall the player is looking at", () => {
+    // Cell (0,0,0) spans 0..4 on each axis; its north face is the plane z = 4.
+    structure.tryAdd(wallAt(0, 0, 0, BuildSlot.NorthFace));
+    const target = resolveEditTarget(vec3(2, 2, 1), vec3(0, 0, 1), structure);
+    expect(target.found).toBe(true);
+    expect(target.slot).toBe(BuildSlot.NorthFace);
+  });
+
+  it("returns the nearest wall, not the furthest", () => {
+    // Two parallel walls ahead: the player means the one they can touch.
+    structure.tryAdd(wallAt(0, 0, 0, BuildSlot.NorthFace)); // plane z = 4
+    structure.tryAdd(wallAt(0, 0, 1, BuildSlot.NorthFace)); // plane z = 8
+    const target = resolveEditTarget(vec3(2, 2, 1), vec3(0, 0, 1), structure);
+    expect(target.cell.z).toBe(0);
+  });
+
+  it("stays within build range", () => {
+    // A wall well beyond MAX_PLACE_DISTANCE must not be editable through it.
+    structure.tryAdd(wallAt(0, 0, 4, BuildSlot.NorthFace)); // plane z = 20
+    expect(resolveEditTarget(vec3(2, 2, 1), vec3(0, 0, 1), structure).found).toBe(false);
+  });
+
+  it("reports the top row when looking at the top of a wall", () => {
+    // subCellIndex puts index 0 at the TOP-left, so a hit near the top of the
+    // cell must land in 0..2. Getting this inverted produces upside-down
+    // doorways that look almost right.
+    structure.tryAdd(wallAt(0, 0, 0, BuildSlot.NorthFace));
+    const high = resolveEditTarget(vec3(2, 3.5, 1), vec3(0, 0, 1), structure);
+    expect(high.found).toBe(true);
+    expect(high.subCell).toBeLessThanOrEqual(2);
+
+    const low = resolveEditTarget(vec3(2, 0.5, 1), vec3(0, 0, 1), structure);
+    expect(low.found).toBe(true);
+    expect(low.subCell).toBeGreaterThanOrEqual(6);
+  });
+
+  it("distinguishes the three columns across a face", () => {
+    structure.tryAdd(wallAt(0, 0, 0, BuildSlot.NorthFace));
+    const columns = [0.7, 2, 3.3].map(
+      (x) => resolveEditTarget(vec3(x, 2, 1), vec3(0, 0, 1), structure).subCell % 3,
+    );
+    expect(new Set(columns).size).toBe(3);
+  });
+
+  it("finds a wall on an east face too", () => {
+    // East/west faces swap which world axis runs across the face; getting that
+    // wrong makes side walls uneditable while north walls work.
+    structure.tryAdd(wallAt(0, 0, 0, BuildSlot.EastFace)); // plane x = 4
+    const target = resolveEditTarget(vec3(1, 2, 2), vec3(1, 0, 0), structure);
+    expect(target.found).toBe(true);
+    expect(target.slot).toBe(BuildSlot.EastFace);
+  });
+
+  it("does not report a wall the ray passes beside", () => {
+    structure.tryAdd(wallAt(0, 0, 0, BuildSlot.NorthFace));
+    // Aimed parallel to the face, never crossing its plane.
+    expect(resolveEditTarget(vec3(2, 2, 1), vec3(1, 0, 0), structure).found).toBe(false);
+  });
+
+  it("produces a mask an authored variant matches", () => {
+    // The end-to-end claim: toggling the cells the doorway clears must select
+    // the doorway variant, or the edit reverts and nothing visibly happens.
+    const blueprint = blueprints().buildPiece("piece.wall");
+    const doorway = blueprint.editVariants.find((v) => v.variantName === "Doorway")!;
+
+    let mask = SOLID_MASK;
+    doorway.gridMask.forEach((keep, index) => {
+      if (!keep) mask = toggleMaskBit(mask, index);
+    });
+
+    expect(variantForMask(blueprint, mask)?.variantName).toBe("Doorway");
   });
 });

@@ -107,6 +107,42 @@ client supplies them:
 Part roles are the generator's own part names with the instance suffix stripped:
 `Canopy_3` and `Canopy_0` are both `Canopy`.
 
+## The player character
+
+`blender/lib/tonight/character.py` generates a blocky humanoid proxy, which
+[ADR-0004](../adr/0004-procedural-art-pipeline.md) explicitly accepted as the
+weakest case for a generated-art pipeline. Third person means the player looks at
+it for the whole match, so two things about it are load-bearing:
+
+- **It faces Blender −Y, which is glTF +Z**, because the motor's yaw of zero
+  points at +Z. Authored any other way it runs backwards and the camera behind
+  the player stares at its face.
+- **Its parts are named for the hitboxes in `CharacterBlueprint`** (`Head`,
+  `Chest`, `ArmLeft`, …), so the client colours a limb without a second list of
+  what a limb is.
+
+It is also narrower than a third of a cell, so it fits through the doorway it can
+cut. Nothing animates it yet: it slides.
+
+## Edit variants
+
+A wall's `editMask` selects its mesh through the same blueprint the simulation
+validated against:
+
+```ts
+const variant = variantForMask(piece, editMask);   // undefined when solid
+const key = buildPieceKey(placement, materialKind, variant?.variantName.toLowerCase());
+```
+
+`SM_Build_Wall_Wood_Doorway` keys as `wall/wood/doorway`, so the edit path is the
+same lookup as the solid path with one more segment. A mask no variant matches is
+a solid piece, which is exactly how `tryEdit` treats it — so the mesh and the
+simulation cannot disagree about what an unrecognised mask means.
+
+The generated variants are cheap to tell apart, which is what makes the browser
+test meaningful: a solid wall is 408 vertices and a doorway is 168, so the smoke
+test can assert the *variant* mesh loaded rather than just that something did.
+
 ## What is not loaded yet
 
 - **Terrain.** The client generates its heightfield in the browser, because
@@ -114,9 +150,6 @@ Part roles are the generator's own part names with the instance suffix stripped:
   two different surfaces in one scene.
 - **Weapons.** Nothing renders a held weapon yet. When that lands,
   `wantedInSandbox()` in `sandbox.ts` is the one place that changes.
-- **Edit variants.** The doorway and window meshes are exported and the key
-  scheme reaches them (`wall/wood/doorway`), but the renderer still draws the
-  solid piece after an edit.
 
 ## When something does not appear
 

@@ -164,9 +164,17 @@ A player may edit a piece they own. Edit variants come from
 
 ```
 hold edit → 3×3 overlay appears on the piece face
-drag across cells → toggles mask entries
-release → the matching EditVariant is applied; no match → revert
+press       → the cell under the crosshair flips, and that becomes the
+              state the drag paints
+drag        → every cell the crosshair crosses is set to that same state
+release     → the matching EditVariant is applied; no match → revert
 ```
+
+The drag **paints** one state rather than toggling each cell it crosses. An
+earlier version of this spec said toggle, and it is wrong: crossing a cell twice
+undoes it, so a shaky drag mid-fight silently produces a different shape from the
+one intended. Painting is idempotent, so only *where* the crosshair went matters,
+not how many times it went there.
 
 Rules:
 

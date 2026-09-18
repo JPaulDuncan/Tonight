@@ -10,6 +10,47 @@ attention and for the game's skill ceiling, and building is the pillar.
 
 What remains: walk, sprint, crouch, jump, mantle.
 
+## 1a. Camera
+
+**Third person, over the shoulder.** This was never written down and the sandbox
+drifted to first person; it is written down now because it is a design decision,
+not a rendering detail.
+
+Third person is the genre's, and it is load-bearing for the pillar rather than
+cosmetic:
+
+- A build fight is fought around your own structure. You need to see the ramp you
+  are standing on, the wall behind you, and the cone over your head, and first
+  person hides all three.
+- Editing means aiming at a wall you are standing against. In first person your
+  own face is inside it.
+- Your silhouette is information your opponent is entitled to, and playing in
+  first person while they play in third would be an advantage nobody chose.
+
+| Property | Value |
+| --- | --- |
+| Boom length | 3.4 m behind the eye, along the aim direction |
+| Shoulder offset | 0.75 m right, flattened so pitch does not roll the camera |
+| Rise | 0.35 m above the eye |
+| Convergence | 10 m |
+| Minimum boom | 0.6 m, when the boom would otherwise pass through geometry |
+
+**Gameplay reads the eye, not the camera.** Build range, the placement resolver
+and the edit raycast all start at the player's eye and travel along the aim
+direction; the camera is a view onto that and never an input to it. Feeding the
+camera position to the resolver would quietly extend build range by the length of
+the boom.
+
+An offset camera and a centre-screen crosshair disagree unless the camera *looks
+at* a point on the aim ray rather than merely pointing the same way. Convergence
+is set to build range because that is where the crosshair has to be truthful;
+there is a little parallax at other distances, which is the accepted cost of the
+over-the-shoulder framing.
+
+The boom is shortened when it would sit inside terrain or a build piece.
+Without that, backing into a wall puts the camera on the far side of it and the
+player sees the inside of their own base.
+
 ## 2. Values
 
 All from `MovementBlueprint`. GDD §3 holds the shipped defaults.

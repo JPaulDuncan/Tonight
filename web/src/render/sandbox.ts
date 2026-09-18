@@ -10,13 +10,18 @@
 import * as THREE from "three";
 
 import { blueprints } from "@/blueprints/library";
+import { SOLID_MASK } from "@/blueprints/registry";
 import type { BuildMaterialBlueprint, CharacterBlueprint } from "@/blueprints/types";
 import {
-  BuildSlot, CELL_SIZE, cellCentre, parsePieceKey, slotAnchor, slotRotationY, type GridCell,
+  BuildSlot, CELL_SIZE, cellCentre, cellToWorld, parsePieceKey, pieceKey, slotAnchor,
+  slotRotationY,
+  type GridCell,
 } from "@/core/grid";
-import { vec2, vec3 } from "@/core/math";
+import { vec2, vec3, type Vec3 } from "@/core/math";
 import { MoveFlags, PlacementRejection, moveCommand } from "@/gameplay/commands";
-import { BuildWorld, resolvePlacement, placementTransform } from "@/gameplay/build";
+import {
+  BuildWorld, resolveEditTarget, resolvePlacement, placementTransform, variantForMask,
+} from "@/gameplay/build";
 import { fullHealth, type HealthPool } from "@/gameplay/combat";
 import { harvestHit, harvestStateFor, weakPointFor, type HarvestState } from "@/gameplay/harvest";
 import {
@@ -39,13 +44,54 @@ const ART_BASE_URL = "art/";
  * lands, this predicate is the one place that changes.
  */
 function wantedInSandbox(record: ArtRecord): boolean {
-  return record.category === "build" || record.category === "harvest";
+  return ["build", "harvest", "character"].includes(record.category);
 }
+
+/**
+ * Third-person camera rig.
+ *
+ * Fortnite's camera is over-the-shoulder, and so is this one. The boom sits
+ * behind the player along the aim direction, offset to the right and slightly
+ * up.
+ */
+const CAMERA_BOOM = 3.4;
+const CAMERA_SHOULDER = 0.75;
+const CAMERA_RISE = 0.35;
+
+/**
+ * How far along the aim ray the camera converges.
+ *
+ * An offset camera and a centre-screen crosshair disagree unless the camera
+ * *looks at* a point on the player's aim ray rather than simply pointing the
+ * same way. Converging removes the parallax at this distance and leaves a
+ * little at others, so it is set to build range: the crosshair has to be
+ * truthful where building happens, because building is the pillar.
+ */
+const CAMERA_CONVERGE = 10;
+
+/** Keeps the boom from burying the camera in a wall the player just built. */
+const CAMERA_MIN_BOOM = 0.6;
 
 /** Part roles the harvestable generators emit, mapped to their colours. */
 const PROP_PART_COLOURS: Readonly<Record<string, number>> = {
   Trunk: 0x6b4a2f,
   Canopy: 0x2f4a33,
+};
+
+/**
+ * Character part colours, keyed by the hitbox each part stands for.
+ *
+ * The generator names its parts after `CharacterBlueprint.hitboxes`, so these
+ * line up without a second list of what a limb is.
+ */
+const CHARACTER_PART_COLOURS: Readonly<Record<string, number>> = {
+  Head: 0xd8b28a,
+  Chest: 0x4a6fa5,
+  Pelvis: 0x3b5580,
+  ArmLeft: 0xd8b28a,
+  ArmRight: 0xd8b28a,
+  LegLeft: 0x35507a,
+  LegRight: 0x35507a,
 };
 
 const PLAYER_ID = 1;
@@ -64,6 +110,8 @@ export class Sandbox {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
+  private avatar!: THREE.Group;
+  private editTiles: THREE.Mesh[] = [];
   private lastFrameMs = 0;
 
   private readonly field: Heightfield;
@@ -92,6 +140,11 @@ export class Sandbox {
   private primaryPressed = false;
   private buildMode = false;
   private selectedPieceId = "piece.wall";
+  /**
+   * Non-null while the edit key is held: the piece, the mask being drawn, and
+   * the state the drag is painting.
+   */
+  private editing: { key: string; mask: number; paintKeeps: boolean } | undefined;
   private selectedMaterialId = "material.wood";
 
   /**
@@ -157,6 +210,10 @@ export class Sandbox {
     // in roughly the right place.
     (window as unknown as { __tonight?: unknown }).__tonight = {
       describePieces: () => this.describePieces(),
+      describeEdit: () => ({
+        editing: this.editing ? { ...this.editing } : null,
+        target: this.editTarget(),
+      }),
     };
   }
 
@@ -208,6 +265,8 @@ export class Sandbox {
 
     this.scene.add(this.terrainMesh());
     this.scatter();
+    this.makeAvatar();
+    this.makeEditOverlay();
     this.makeGhost();
   }
 
@@ -249,6 +308,113 @@ export class Sandbox {
     }
   }
 
+  /**
+   * The player's own body.
+   *
+   * Third person means the player looks at this the entire match, so it is the
+   * most-seen mesh in the game and the one whose facing being wrong would be
+   * most obvious. It is driven from the motor rather than from the camera: the
+   * camera is a view onto the simulation, not the other way round.
+   */
+  private makeAvatar(): void {
+    const name = this.art.nameForKey("default");
+    if (!name) throw new Error("No character mesh was loaded. Re-run: npm run art");
+
+    this.avatar = new THREE.Group();
+    for (const part of this.art.partsOf(name)) {
+      const material = new THREE.MeshLambertMaterial({
+        color: CHARACTER_PART_COLOURS[part.group] ?? 0x8899aa,
+      });
+      const mesh = new THREE.Mesh(part.geometry, material);
+      mesh.castShadow = true;
+      this.avatar.add(mesh);
+    }
+    this.scene.add(this.avatar);
+  }
+
+  private updateAvatar(): void {
+    // The mesh is authored based at Z=0 facing +Z, so the motor's position and
+    // yaw drive it directly with no offset to get wrong.
+    this.avatar.position.set(
+      this.motor.position.x, this.motor.position.y, this.motor.position.z,
+    );
+    this.avatar.rotation.y = (this.motor.yaw * Math.PI) / 180;
+
+    // Crouching squashes rather than swapping mesh: the capsule shrinks by the
+    // same ratio, so the proxy stays inside the thing collision actually uses.
+    const movement = blueprints().movement("movement.default");
+    const squash = this.motor.crouched ? movement.crouchHeight / movement.standHeight : 1;
+    this.avatar.scale.set(1, squash, 1);
+  }
+
+  /**
+   * The nine tiles drawn over a face while editing.
+   *
+   * Built once and repositioned, because an edit happens mid-fight and
+   * allocating nine meshes on the frame the key goes down is the wrong time to
+   * ask the GC for anything.
+   */
+  private makeEditOverlay(): void {
+    const tile = CELL_SIZE / 3;
+    this.editTiles = [];
+    for (let index = 0; index < 9; index++) {
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(tile * 0.88, tile * 0.88),
+        new THREE.MeshBasicMaterial({
+          transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide,
+        }),
+      );
+      mesh.visible = false;
+      this.editTiles.push(mesh);
+      this.scene.add(mesh);
+    }
+  }
+
+  private updateEditOverlay(): void {
+    const pending = this.editing;
+    if (!pending) {
+      for (const tile of this.editTiles) tile.visible = false;
+      return;
+    }
+
+    const { cell, slot } = parsePieceKey(pending.key);
+    const anchor = slotAnchor(cell, slot);
+    const base = cellToWorld(cell);
+    const rotationY = slotRotationY(slot);
+    const step = CELL_SIZE / 3;
+
+    // Nudge off the face so the tiles are not z-fighting the wall they mark.
+    const OFF_FACE = 0.16;
+    const onNorthSouth = slot === BuildSlot.NorthFace || slot === BuildSlot.SouthFace;
+    const towardPlayer = onNorthSouth
+      ? Math.sign(this.motor.position.z - anchor.z) || 1
+      : Math.sign(this.motor.position.x - anchor.x) || 1;
+
+    for (let index = 0; index < 9; index++) {
+      const tile = this.editTiles[index]!;
+      const column = index % 3;
+      // Index 0 is the TOP-left, matching subCellIndex and how a designer reads
+      // the grid, so row 0 is the highest band on the wall.
+      const rowFromBottom = 2 - Math.floor(index / 3);
+
+      const along = base.x + step * (column + 0.5);
+      const acrossAlong = base.z + step * (column + 0.5);
+      const height = base.y + step * (rowFromBottom + 0.5);
+
+      tile.position.set(
+        onNorthSouth ? along : anchor.x + OFF_FACE * towardPlayer,
+        height,
+        onNorthSouth ? anchor.z + OFF_FACE * towardPlayer : acrossAlong,
+      );
+      tile.rotation.set(0, rotationY, 0);
+
+      // Set bits are the wall that remains; cleared bits are what gets cut out.
+      const keeps = (pending.mask & (1 << index)) !== 0;
+      (tile.material as THREE.MeshBasicMaterial).color.setHex(keeps ? 0x66ddff : 0xff7755);
+      tile.visible = true;
+    }
+  }
+
   private makeGhost(): void {
     this.ghost = new THREE.Mesh(
       this.geometryFor(this.selectedPieceId, this.selectedMaterialId),
@@ -276,12 +442,22 @@ export class Sandbox {
    * plus a generator -- never a branch here. This used to switch on `pieceId`,
    * which is the anti-pattern CLAUDE.md names first.
    */
-  private geometryFor(pieceId: string, materialId: string): THREE.BufferGeometry {
+  private geometryFor(
+    pieceId: string, materialId: string, editMask: number = SOLID_MASK,
+  ): THREE.BufferGeometry {
     const registry = blueprints();
-    const placement = registry.buildPiece(pieceId).placement;
+    const piece = registry.buildPiece(pieceId);
     const materialKind = registry.buildMaterial(materialId).materialKind;
 
-    const key = buildPieceKey(placement, materialKind);
+    // An edit resolves through the same blueprint the simulation validated
+    // against, so the mesh drawn is the variant that was actually applied. A
+    // mask with no authored variant is a solid piece, exactly as tryEdit
+    // treats it.
+    const variant = variantForMask(piece, editMask);
+    const key = buildPieceKey(
+      piece.placement, materialKind, variant?.variantName.toLowerCase(),
+    );
+
     const name = this.art.nameForKey(key);
     if (!name) {
       // Loudly, not silently: a missing mesh with live collision is an
@@ -352,7 +528,8 @@ export class Sandbox {
 
     this.removePieceMesh(key);
     const mesh = new THREE.Mesh(
-      this.geometryFor(piece.pieceId, piece.materialId), this.pieceMaterial(piece.materialId),
+      this.geometryFor(piece.pieceId, piece.materialId, piece.editMask),
+      this.pieceMaterial(piece.materialId),
     );
 
     const origin = this.meshOrigin(piece.cell, piece.slot);
@@ -430,9 +607,17 @@ export class Sandbox {
 
       if (event.code === "KeyQ") this.buildMode = !this.buildMode;
       if (event.code === "KeyR") this.reset();
+      if (event.code === "KeyG" && !event.repeat) this.beginEdit();
+      // Reset-to-default is one input: fumbling an edit mid-fight and needing to
+      // undo it instantly is common (building.md section 5).
+      if (event.code === "KeyT") this.resetEdit();
     });
 
-    document.addEventListener("keyup", (event) => this.keys.delete(event.code));
+    document.addEventListener("keyup", (event) => {
+      this.keys.delete(event.code);
+      // Release applies, per the spec: hold, drag across cells, release.
+      if (event.code === "KeyG") this.commitEdit();
+    });
   }
 
   private reset(): void {
@@ -465,7 +650,10 @@ export class Sandbox {
       this.simulate();
     }
 
+    this.updateAvatar();
     this.updateCamera();
+    this.paintEdit();
+    this.updateEditOverlay();
     this.updateGhost();
     this.renderer.render(this.scene, this.camera);
 
@@ -549,6 +737,93 @@ export class Sandbox {
     );
   }
 
+  // -----------------------------------------------------------------------
+  // Editing
+  // -----------------------------------------------------------------------
+
+  private editTarget() {
+    return resolveEditTarget(this.eyePosition(), this.aimDirection(), this.world.structure);
+  }
+
+  /** Start drawing a mask on the piece under the crosshair. */
+  private beginEdit(): void {
+    const target = this.editTarget();
+    if (!target.found) {
+      this.say("nothing to edit");
+      return;
+    }
+
+    const piece = this.world.structure.get(target.cell, target.slot);
+    if (!piece) return;
+    if (piece.ownerId !== PLAYER_ID) {
+      // Ownership transfers on nothing: a captured structure must be destroyed,
+      // not edited (building.md section 5).
+      this.say("not yours to edit");
+      return;
+    }
+
+    // The first cell decides what the drag paints: press on a solid cell and
+    // the drag cuts, press on a hole and it fills back in.
+    const wasKept = (piece.editMask & (1 << target.subCell)) !== 0;
+    this.editing = {
+      key: pieceKey(target.cell, target.slot),
+      mask: piece.editMask,
+      paintKeeps: !wasKept,
+    };
+    this.paintEdit();
+  }
+
+  /**
+   * Paint the sub-cell under the crosshair.
+   *
+   * Called every frame while the key is held, so sweeping the crosshair across
+   * a face drags a selection. It **paints** one state rather than toggling each
+   * cell it crosses: crossing a cell twice with a toggle undoes it, so a shaky
+   * drag mid-fight silently produces a different shape from the one intended.
+   * Painting is idempotent, so only where the crosshair went matters, not how
+   * many times it went there.
+   */
+  private paintEdit(): void {
+    const pending = this.editing;
+    if (!pending) return;
+
+    const target = this.editTarget();
+    if (!target.found || pieceKey(target.cell, target.slot) !== pending.key) return;
+
+    const bit = 1 << target.subCell;
+    const mask = pending.paintKeeps ? pending.mask | bit : pending.mask & ~bit;
+    if (mask !== pending.mask) this.editing = { ...pending, mask };
+  }
+
+  /** Apply the drawn mask, or revert when it matches no authored variant. */
+  private commitEdit(): void {
+    const pending = this.editing;
+    this.editing = undefined;
+    if (!pending) return;
+
+    const { cell, slot } = parsePieceKey(pending.key);
+    const piece = this.world.structure.get(cell, slot);
+    if (!piece) return;
+
+    const blueprint = blueprints().buildPiece(piece.pieceId);
+    // No authored variant means revert to solid rather than refusing: the spec
+    // makes a nonsense selection a no-op, not a stuck piece.
+    const variant = variantForMask(blueprint, pending.mask);
+    const mask = variant ? pending.mask : SOLID_MASK;
+
+    if (this.world.tryEdit(cell, slot, mask, PLAYER_ID)) {
+      this.say(variant ? variant.variantName.toLowerCase() : "reverted");
+    }
+  }
+
+  private resetEdit(): void {
+    const target = this.editTarget();
+    if (!target.found) return;
+    if (this.world.tryEdit(target.cell, target.slot, SOLID_MASK, PLAYER_ID)) {
+      this.say("reverted");
+    }
+  }
+
   private tryPlace(): void {
     const target = this.currentTarget();
     if (!target.found) return;
@@ -615,10 +890,51 @@ export class Sandbox {
 
   private updateCamera(): void {
     const eye = this.eyePosition();
-    this.camera.position.set(eye.x, eye.y, eye.z);
-    this.camera.rotation.order = "YXZ";
-    this.camera.rotation.y = (this.motor.yaw * Math.PI) / 180 + Math.PI;
-    this.camera.rotation.x = (this.motor.pitch * Math.PI) / 180;
+    const aim = this.aimDirection();
+
+    // Right-hand side of the aim direction, flattened: the shoulder offset must
+    // not tilt with pitch or the camera rolls when the player looks up.
+    const rightX = -aim.z;
+    const rightZ = aim.x;
+    const rightLength = Math.hypot(rightX, rightZ) || 1;
+
+    const offsetX = (rightX / rightLength) * CAMERA_SHOULDER;
+    const offsetZ = (rightZ / rightLength) * CAMERA_SHOULDER;
+
+    const boom = this.clearBoom(eye, aim, offsetX, offsetZ);
+
+    this.camera.position.set(
+      eye.x - aim.x * boom + offsetX,
+      eye.y - aim.y * boom + CAMERA_RISE,
+      eye.z - aim.z * boom + offsetZ,
+    );
+    // Look at a point on the *player's* aim ray, not merely along the same
+    // direction, so the crosshair and the placement resolver agree.
+    this.camera.lookAt(
+      eye.x + aim.x * CAMERA_CONVERGE,
+      eye.y + aim.y * CAMERA_CONVERGE,
+      eye.z + aim.z * CAMERA_CONVERGE,
+    );
+  }
+
+  /**
+   * Shorten the boom until it is not inside something.
+   *
+   * Without this, backing into a wall puts the camera on the far side of it and
+   * the player sees the inside of their own base. Sampled rather than swept:
+   * the collision model is a height query and a set of slabs, not a solver, and
+   * a handful of samples along a 3.4 m boom is accurate to a few centimetres.
+   */
+  private clearBoom(eye: Vec3, aim: Vec3, offsetX: number, offsetZ: number): number {
+    const STEPS = 8;
+    for (let step = STEPS; step > 0; step--) {
+      const boom = (CAMERA_BOOM * step) / STEPS;
+      const x = eye.x - aim.x * boom + offsetX;
+      const y = eye.y - aim.y * boom + CAMERA_RISE;
+      const z = eye.z - aim.z * boom + offsetZ;
+      if (!this.collision.isInsideSolid(x, y, z)) return boom;
+    }
+    return CAMERA_MIN_BOOM;
   }
 
   private updateGhost(): void {

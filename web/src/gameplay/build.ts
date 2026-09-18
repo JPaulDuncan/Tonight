@@ -22,6 +22,8 @@ import {
   MAX_PLACE_DISTANCE,
   canonicalise,
   cellCentre,
+  cellToWorld,
+  isVerticalFace,
   isWireRepresentable,
   offsetCell,
   parsePieceKey,
@@ -450,6 +452,82 @@ export function resolvePlacement(
  */
 export function placementTransform(target: PlacementTarget): { position: Vec3; rotationY: number } {
   return { position: slotAnchor(target.cell, target.slot), rotationY: slotRotationY(target.slot) };
+}
+
+/** Half the thickness of a wall slab, for deciding whether a ray has reached it. */
+const EDIT_SLAB_HALF = 0.2;
+
+/** A piece the player is aiming at, and where on its face. */
+export interface EditTarget {
+  readonly cell: GridCell;
+  readonly slot: BuildSlot;
+  readonly subCell: number;
+  readonly found: boolean;
+}
+
+const NO_EDIT_TARGET: EditTarget = {
+  cell: { x: 0, y: 0, z: 0 }, slot: BuildSlot.Interior, subCell: -1, found: false,
+};
+
+/**
+ * Find the existing piece under the crosshair, and which of its nine sub-cells.
+ *
+ * Marched rather than solved analytically. The structure is a sparse map keyed
+ * by cell, so walking the ray and asking "is there a piece here" is both simpler
+ * and cheaper than intersecting a ray against every piece, and it naturally
+ * returns the *nearest* hit -- which is the one the player means.
+ *
+ * Lives here rather than in the renderer because a server has to validate an
+ * edit against the same geometry the client aimed with. Nothing in this file
+ * knows about three.js.
+ */
+export function resolveEditTarget(
+  eye: Vec3, direction: Vec3, structure: BuildStructure,
+): EditTarget {
+  const dir = normalise3(direction);
+  const STEP = 0.1;
+
+  for (let travelled = 0; travelled <= MAX_PLACE_DISTANCE; travelled += STEP) {
+    const px = eye.x + dir.x * travelled;
+    const py = eye.y + dir.y * travelled;
+    const pz = eye.z + dir.z * travelled;
+    const here = worldToCell(px, py, pz);
+
+    for (const slot of ALL_SLOTS) {
+      if (!isVerticalFace(slot)) continue;
+
+      const { cell: owner, slot: ownerSlot } = canonicalise(here, slot);
+      const piece = structure.get(owner, ownerSlot);
+      if (!piece) continue;
+
+      const anchorPoint = slotAnchor(owner, ownerSlot);
+      const base = cellToWorld(owner);
+
+      // Vertical extent is shared by every face slot.
+      if (py < base.y || py > base.y + CELL_SIZE) continue;
+
+      const onNorthSouth =
+        ownerSlot === BuildSlot.NorthFace || ownerSlot === BuildSlot.SouthFace;
+
+      // Has the ray reached the slab's plane, and is it within the face?
+      const acrossDistance = onNorthSouth
+        ? Math.abs(pz - anchorPoint.z)
+        : Math.abs(px - anchorPoint.x);
+      if (acrossDistance > EDIT_SLAB_HALF) continue;
+
+      const along = onNorthSouth ? px - base.x : pz - base.z;
+      if (along < 0 || along > CELL_SIZE) continue;
+
+      return {
+        cell: owner,
+        slot: ownerSlot,
+        subCell: subCellIndex(along / CELL_SIZE, (py - base.y) / CELL_SIZE),
+        found: true,
+      };
+    }
+  }
+
+  return NO_EDIT_TARGET;
 }
 
 /** Which of the 3x3 sub-cells a point on a piece's face falls in. */

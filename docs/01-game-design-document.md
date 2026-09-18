@@ -127,6 +127,11 @@ matter: missing every marker doubles the time to a box.
 
 Full spec: [systems/movement.md](systems/movement.md).
 
+**The camera is third person, over the shoulder.** A build fight is fought around
+your own structure, and first person hides the ramp under you, the wall behind
+you and the cone above you. Editing a wall you are standing against needs to be
+possible without your own face being inside it.
+
 | Property | Value |
 | --- | --- |
 | Walk speed | 4.6 m/s |
