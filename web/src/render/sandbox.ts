@@ -22,7 +22,11 @@ import { MoveFlags, PlacementRejection, moveCommand } from "@/gameplay/commands"
 import {
   BuildWorld, resolveEditTarget, resolvePlacement, placementTransform, variantForMask,
 } from "@/gameplay/build";
-import { fullHealth, type HealthPool } from "@/gameplay/combat";
+import {
+  FireRejection, beginEquip, computeDamage, effectiveSpread, freshWeaponState,
+  fullHealth, pelletDirection, tickWeapon, tryBeginReload, tryFire,
+  type HealthPool, type WeaponState,
+} from "@/gameplay/combat";
 import { harvestHit, harvestStateFor, weakPointFor, type HarvestState } from "@/gameplay/harvest";
 import {
   TICK_DELTA, TICK_RATE, motorAtRest, stepMotor, yawRotate, type MotorState,
@@ -122,6 +126,37 @@ const PICKAXE_DAMAGE = 20;
 const PICKAXE_INTERVAL_TICKS = Math.ceil((60 / 84) * TICK_RATE);
 const INTERACT_RANGE = 4.5;
 
+/**
+ * What the sandbox hands you.
+ *
+ * Everything at once, because this is a range for testing weapon feel rather
+ * than a match: the loot system decides what a player actually carries, and it
+ * is tested separately.
+ */
+const SANDBOX_LOADOUT = [
+  "weapon.pickaxe", "weapon.assaultRifle", "weapon.shotgun",
+  "weapon.smg", "weapon.sniper", "weapon.pistol",
+] as const;
+
+/** How far a hitscan shot reaches before it stops caring. */
+const SHOT_RANGE = 220;
+
+/** Reserve ammo. Unlimited in the sandbox; the real number comes from inventory. */
+const SANDBOX_RESERVE_AMMO = 999;
+
+/**
+ * How long a tracer stays on screen.
+ *
+ * Long enough to read, short enough not to smear -- and, more importantly, long
+ * enough to survive a frame. At 0.05 s a tracer could be created and expired
+ * between two frames of a slow renderer, so a shot would land with nothing
+ * drawn at all.
+ */
+const TRACER_SECONDS = 0.09;
+
+/** Tracers alive at once. A spray at 800 rpm would otherwise pile them up. */
+const MAX_TRACERS = 24;
+
 interface PropInstance {
   readonly point: ScatterPoint;
   readonly object: THREE.Object3D;
@@ -135,8 +170,22 @@ export class Sandbox {
   private readonly camera: THREE.PerspectiveCamera;
   private avatar!: THREE.Group;
   private avatarJoints = new Map<string, THREE.Group>();
-  private heldWeapon?: THREE.Group;
-  private readonly heldWeaponId = "weapon.pickaxe";
+  private heldWeapon: THREE.Group | undefined;
+  private heldWeaponId = "weapon.pickaxe";
+  /**
+   * Per-weapon state, kept across swaps.
+   *
+   * Swapping away and back must not refill a magazine -- that would make
+   * swapping a free reload, which is the one thing beginEquip's comment warns
+   * about.
+   */
+  private readonly weaponStates = new Map<string, WeaponState>();
+  private readonly tracers: { line: THREE.Line; until: number }[] = [];
+  /** Cumulative, for the smoke test: a live tracer count races its own expiry. */
+  private shotsFired = 0;
+  private pelletsFired = 0;
+  private structureHits = 0;
+  private propHits = 0;
   private upperBodyId = "upper.carry";
   private upperBodyStartedMs = 0;
   private distanceTravelled = 0;
@@ -274,6 +323,26 @@ export class Sandbox {
         leanX: Number(this.avatar.rotation.x.toFixed(4)),
         speed: Number(this.lastAvatarSpeed.toFixed(3)),
       }),
+      describeWeapon: () => {
+        const weapon = blueprints().weapon(this.heldWeaponId);
+        const state = this.weaponState();
+        return {
+          id: this.heldWeaponId,
+          name: weapon.displayName,
+          fireMode: weapon.fireMode,
+          pelletCount: weapon.pelletCount,
+          ammo: state.ammoInMagazine,
+          magazine: weapon.magazineSize,
+          reloading: state.isReloading,
+          bloom: Number(state.bloomDegrees.toFixed(3)),
+          tracers: this.tracers.length,
+          shotsFired: this.shotsFired,
+          pelletsFired: this.pelletsFired,
+          structureHits: this.structureHits,
+          propHits: this.propHits,
+          heldParts: this.heldWeapon?.children.length ?? 0,
+        };
+      },
       describeEdit: () => ({
         editing: this.editing ? { ...this.editing } : null,
         target: this.editTarget(),
@@ -471,6 +540,39 @@ export class Sandbox {
     }
 
     (joint ?? this.avatar).add(this.heldWeapon);
+  }
+
+  /** The live state of whatever is in hand. */
+  private weaponState(): WeaponState {
+    let state = this.weaponStates.get(this.heldWeaponId);
+    if (!state) {
+      state = freshWeaponState(blueprints().weapon(this.heldWeaponId));
+      this.weaponStates.set(this.heldWeaponId, state);
+    }
+    return state;
+  }
+
+  /**
+   * Swap to another weapon.
+   *
+   * The equip timer is the reason this is not just a mesh change: a weapon is
+   * not usable the instant it appears, and that delay is what makes swapping a
+   * decision rather than a free action.
+   */
+  private equipWeapon(weaponId: string): void {
+    if (weaponId === this.heldWeaponId) return;
+    const weapon = blueprints().weapon(weaponId);
+
+    this.heldWeaponId = weaponId;
+    beginEquip(this.weaponState(), weapon, this.tick, TICK_RATE);
+
+    if (this.heldWeapon) {
+      this.heldWeapon.removeFromParent();
+      this.heldWeapon = undefined;
+    }
+    this.attachHeldWeapon();
+    this.playUpperBody(weapon.carryPoseId);
+    this.say(weapon.displayName.toLowerCase());
   }
 
   private weaponMaterial(weaponId: string, partRole: string): THREE.MeshLambertMaterial {
@@ -810,6 +912,17 @@ export class Sandbox {
       this.keys.add(event.code);
       if (event.code === "Space") this.jumpQueued = true;
 
+      // The number row means pieces while building and weapons otherwise: the
+      // same keys, read against what the player is currently doing.
+      if (!this.buildMode) {
+        const slot = Number(event.code.replace("Digit", ""));
+        const weaponId = SANDBOX_LOADOUT[slot - 1];
+        if (event.code.startsWith("Digit") && weaponId) {
+          this.equipWeapon(weaponId);
+          return;
+        }
+      }
+
       const pieces: Record<string, string> = {
         Digit1: "piece.wall", Digit2: "piece.floor", Digit3: "piece.ramp", Digit4: "piece.cone",
       };
@@ -826,7 +939,17 @@ export class Sandbox {
       if (material) this.selectedMaterialId = material;
 
       if (event.code === "KeyQ") this.buildMode = !this.buildMode;
-      if (event.code === "KeyR") this.reset();
+      // R reloads, as it does in every shooter. Resetting the world is a
+      // sandbox convenience and gives up the letter.
+      if (event.code === "KeyR") {
+        const weapon = blueprints().weapon(this.heldWeaponId);
+        if (tryBeginReload(
+          this.weaponState(), weapon, this.tick, TICK_RATE, SANDBOX_RESERVE_AMMO,
+        )) {
+          this.say("reloading");
+        }
+      }
+      if (event.code === "Backspace") this.reset();
       if (event.code === "KeyG" && !event.repeat) this.beginEdit();
       // Reset-to-default is one input: fumbling an edit mid-fight and needing to
       // undo it instantly is common (building.md section 5).
@@ -870,6 +993,7 @@ export class Sandbox {
       this.simulate();
     }
 
+    this.expireTracers();
     this.updateAvatar(delta);
     this.updateCamera();
     this.paintEdit();
@@ -889,6 +1013,7 @@ export class Sandbox {
       pieceCount: this.world.structure.count,
       fps: this.fps,
       lastMessage: this.tick < this.messageUntil ? this.message : "",
+      ...this.weaponHud(),
     });
   }
 
@@ -920,12 +1045,24 @@ export class Sandbox {
     this.world.setPlayerPosition(PLAYER_ID, this.eyePosition());
     this.world.tick(this.tick);
 
-    if (this.primaryDown || this.primaryPressed) {
-      if (this.buildMode) {
-        if (this.primaryPressed) this.tryPlace();
-      } else {
-        this.trySwing();
+    // Timers advance whether or not the trigger is down: a reload finishes
+    // while you run, and bloom recovers while you hold fire.
+    const held = blueprints().weapon(this.heldWeaponId);
+    tickWeapon(this.weaponState(), held, this.tick, TICK_DELTA);
+
+    if (this.buildMode) {
+      if (this.primaryPressed) this.tryPlace();
+      // Releasing the trigger has to reach the weapon even in build mode, or a
+      // semi-auto stays "still held" and refuses the next shot after a build.
+      if (!this.primaryDown) {
+        tryFire(this.weaponState(), held, this.tick, TICK_RATE, false);
       }
+    } else if (held.weaponClass === "melee") {
+      if (this.primaryDown || this.primaryPressed) this.trySwing();
+    } else {
+      // Called every tick rather than only on a press: automatic weapons keep
+      // firing while the trigger is down, and tryFire owns that decision.
+      this.tryShoot();
     }
     this.primaryPressed = false;
 
@@ -1062,6 +1199,140 @@ export class Sandbox {
     this.playUpperBody("upper.build");
   }
 
+  /**
+   * Fire, if the weapon will let us.
+   *
+   * All the decisions -- cooldown, fire mode, magazine, reload and equip
+   * timers -- live in `tryFire`, which is tested headlessly and is the same
+   * function a server would run. This function's whole job is to ask, and then
+   * to draw the consequences.
+   */
+  private tryShoot(): void {
+    const registry = blueprints();
+    const weapon = registry.weapon(this.heldWeaponId);
+    const state = this.weaponState();
+
+    const rejection = tryFire(state, weapon, this.tick, TICK_RATE, this.primaryDown);
+    if (rejection !== FireRejection.None) {
+      // An empty magazine is the one rejection worth a word: the others are
+      // timers the player can feel.
+      if (rejection === FireRejection.MagazineEmpty) this.say("reload");
+      return;
+    }
+
+    this.playUpperBody(weapon.usePoseId);
+    this.shotsFired++;
+
+    const eye = this.eyePosition();
+    const aim = this.aimDirection();
+    const spread = effectiveSpread(state, weapon);
+    // Seeded from the tick so a predicted shot and an authoritative one agree
+    // without replicating per-pellet data.
+    const shotSeed = this.tick * 2654435761;
+
+    for (let pellet = 0; pellet < Math.max(1, weapon.pelletCount); pellet++) {
+      this.pelletsFired++;
+      this.fireOnePellet(weapon, pelletDirection(aim, spread, shotSeed, pellet), eye);
+    }
+  }
+
+  private fireOnePellet(
+    weapon: { damageProfileId: string }, direction: Vec3, eye: Vec3,
+  ): void {
+    const registry = blueprints();
+    const profile = registry.damageProfile(weapon.damageProfileId);
+
+    // Props first: they sit in the scatter list rather than the collision
+    // world, so the trace does not know about them.
+    const prop = this.propAlongRay(eye, direction, SHOT_RANGE);
+    const trace = this.collision.trace(eye, direction, SHOT_RANGE);
+
+    if (prop && prop.distance < trace.distance) {
+      const damage = computeDamage({
+        profile, targetKind: "harvestable", distanceMetres: prop.distance,
+      });
+      this.propHits++;
+      this.damageProp(prop.prop, damage, false);
+      this.spawnTracer(eye, prop.point);
+      return;
+    }
+
+    if (trace.kind === "structure" && trace.cell && trace.slot !== undefined) {
+      const damage = computeDamage({
+        profile, targetKind: "structure", distanceMetres: trace.distance,
+      });
+      this.structureHits++;
+      this.world.applyDamage(trace.cell, trace.slot, damage, this.tick);
+    }
+    this.spawnTracer(eye, trace.point);
+  }
+
+  /** Nearest harvestable the ray passes close enough to count as a hit. */
+  private propAlongRay(
+    eye: Vec3, direction: Vec3, maxDistance: number,
+  ): { prop: PropInstance; distance: number; point: Vec3 } | undefined {
+    const PROP_RADIUS = 0.9;
+    let best: { prop: PropInstance; distance: number; point: Vec3 } | undefined;
+
+    for (const prop of this.props) {
+      if (prop.state.destroyed) continue;
+      // Centre of mass rather than the base, or every shot would have to be
+      // aimed at a tree's roots.
+      const cx = prop.point.x - eye.x;
+      const cy = prop.point.y + 1.4 - eye.y;
+      const cz = prop.point.z - eye.z;
+
+      const along = cx * direction.x + cy * direction.y + cz * direction.z;
+      if (along <= 0 || along > maxDistance) continue;
+      if (best && along >= best.distance) continue;
+
+      const px = eye.x + direction.x * along;
+      const py = eye.y + direction.y * along;
+      const pz = eye.z + direction.z * along;
+      const miss = Math.hypot(prop.point.x - px, prop.point.y + 1.4 - py, prop.point.z - pz);
+      if (miss > PROP_RADIUS) continue;
+
+      best = { prop, distance: along, point: { x: px, y: py, z: pz } };
+    }
+    return best;
+  }
+
+  /**
+   * A short-lived line from the muzzle to whatever the shot met.
+   *
+   * Without it a hitscan weapon has no visible output at all: the damage
+   * happens, the target does not obviously react, and the gun reads as broken.
+   */
+  private spawnTracer(from: Vec3, to: Vec3): void {
+    const geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(from.x, from.y - 0.12, from.z),
+      new THREE.Vector3(to.x, to.y, to.z),
+    ]);
+    const line = new THREE.Line(
+      geometry,
+      new THREE.LineBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.85 }),
+    );
+    this.scene.add(line);
+    this.tracers.push({ line, until: performance.now() + TRACER_SECONDS * 1000 });
+    while (this.tracers.length > MAX_TRACERS) this.retireTracer();
+  }
+
+  private expireTracers(): void {
+    const now = performance.now();
+    while (this.tracers.length > 0 && this.tracers[0]!.until <= now) this.retireTracer();
+  }
+
+  private retireTracer(): void {
+    const spent = this.tracers.shift();
+    if (!spent) return;
+    this.scene.remove(spent.line);
+    // These geometries and materials are per-shot, not shared from the art
+    // library, so they are ours to dispose -- and must be, or a magazine's
+    // worth of them leaks per reload.
+    spent.line.geometry.dispose();
+    (spent.line.material as THREE.Material).dispose();
+  }
+
   private trySwing(): void {
     if (this.tick - this.lastPickaxeTick < PICKAXE_INTERVAL_TICKS) return;
     this.lastPickaxeTick = this.tick;
@@ -1104,17 +1375,29 @@ export class Sandbox {
   }
 
   private swingAtProp(prop: PropInstance): void {
+    // Aim the swing at the marker: with no aiming UI in the sandbox, always
+    // hitting it keeps the harvest rates matching the design targets.
+    this.damageProp(prop, PICKAXE_DAMAGE, true);
+  }
+
+  /**
+   * Damage a harvestable and bank what it yields.
+   *
+   * Shared by the pickaxe and by bullets. A shot does not get the weak-point
+   * bonus: hitting the marker is a pickaxe skill, and handing it to anyone who
+   * sprays a tree with an SMG would make the tool pointless.
+   */
+  private damageProp(prop: PropInstance, damage: number, weakPoint: boolean): void {
     const registry = blueprints();
     const blueprint = registry.harvestable(prop.blueprintId);
 
-    // Aim the swing at the marker: with no aiming UI in the sandbox, always
-    // hitting it keeps the harvest rates matching the design targets.
     const marker = weakPointFor(prop.state.objectId, prop.state.hitCount);
-    const result = harvestHit(prop.state, blueprint, PICKAXE_DAMAGE, marker);
+    const aimedAt = weakPoint ? marker : { x: marker.x + 1, y: marker.y + 1 };
+    const result = harvestHit(prop.state, blueprint, damage, aimedAt);
 
     const material = registry.buildMaterial(blueprint.materialId);
     const gained = this.world.wallet(PLAYER_ID).add(material, result.yield);
-    this.say(gained > 0 ? `+${gained} ${material.displayName.toLowerCase()}` : "at cap");
+    if (gained > 0) this.say(`+${gained} ${material.displayName.toLowerCase()}`);
 
     if (result.destroyed) this.scene.remove(prop.object);
   }
@@ -1192,6 +1475,19 @@ export class Sandbox {
     this.ghost.position.set(origin.x, origin.y, origin.z);
     this.ghost.rotation.y = rotationY;
     this.ghost.visible = true;
+  }
+
+  /** What the HUD shows about the weapon in hand. */
+  private weaponHud() {
+    const weapon = blueprints().weapon(this.heldWeaponId);
+    const state = this.weaponState();
+    const usesAmmo = weapon.ammoType !== "none";
+    return {
+      weaponName: weapon.displayName,
+      ammoInMagazine: usesAmmo ? state.ammoInMagazine : -1,
+      magazineSize: weapon.magazineSize,
+      reloading: state.isReloading,
+    };
   }
 
   private say(text: string): void {

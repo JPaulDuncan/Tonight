@@ -24,6 +24,15 @@ import type { BuildStructure, PlacedPiece } from "@/gameplay/build";
 import type { MotorCollision, MotorCollisionResult } from "@/gameplay/motor";
 import type { Heightfield } from "./terrain";
 
+/** What a shot met, and where. */
+export interface ShotTrace {
+  readonly kind: "structure" | "terrain" | "none";
+  readonly distance: number;
+  readonly point: Vec3;
+  readonly cell?: GridCell;
+  readonly slot?: BuildSlot;
+}
+
 /** Half-thickness of a wall or floor slab, in metres. */
 const SLAB_HALF_THICKNESS = 0.12;
 
@@ -234,6 +243,82 @@ export class WorldCollision implements MotorCollision {
   }
 
   /**
+   * The piece occupying a point, if any.
+   *
+   * Shared by the camera boom and the shot trace so the two cannot disagree
+   * about what is solid -- a camera that clips through a wall bullets stop at
+   * would be a strange kind of wrong.
+   */
+  pieceAt(x: number, y: number, z: number): PlacedPiece | undefined {
+    for (const piece of this.piecesNear(x, y, z)) {
+      const box = wallBox(piece.cell, piece.slot);
+      if (box) {
+        if (
+          x > box.minX && x < box.maxX &&
+          y > box.minY && y < box.maxY &&
+          z > box.minZ && z < box.maxZ
+        ) {
+          return piece;
+        }
+        continue;
+      }
+      // Floors, ramps and cones are height queries rather than boxes, so
+      // "inside" means below the surface they present and within their cell.
+      const surface = surfaceHeight(piece, x, z);
+      const base = cellToWorld(piece.cell);
+      if (surface !== undefined && y < surface && y > base.y - SLAB_HALF_THICKNESS) {
+        return piece;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * March a ray until it meets terrain or a build piece.
+   *
+   * Marched rather than solved: the structure is a sparse map keyed by cell, so
+   * stepping and asking "is there anything here" is both simpler and cheaper
+   * than intersecting against every piece, and it returns the *nearest* hit by
+   * construction. The step is small relative to a slab's thickness, because a
+   * step longer than the thing being hit steps straight through it.
+   *
+   * Props are not traced here: they belong to the sandbox's scatter list rather
+   * than to the collision world, and the caller tests them separately.
+   */
+  trace(origin: Vec3, direction: Vec3, maxDistance: number, step = 0.12): ShotTrace {
+    const length = Math.hypot(direction.x, direction.y, direction.z) || 1;
+    const dx = direction.x / length;
+    const dy = direction.y / length;
+    const dz = direction.z / length;
+
+    for (let travelled = step; travelled <= maxDistance; travelled += step) {
+      const x = origin.x + dx * travelled;
+      const y = origin.y + dy * travelled;
+      const z = origin.z + dz * travelled;
+
+      const piece = this.pieceAt(x, y, z);
+      if (piece) {
+        return {
+          kind: "structure", distance: travelled,
+          point: { x, y, z }, cell: piece.cell, slot: piece.slot,
+        };
+      }
+      if (y <= this.field.sample(x, z)) {
+        return { kind: "terrain", distance: travelled, point: { x, y, z } };
+      }
+    }
+
+    return {
+      kind: "none", distance: maxDistance,
+      point: {
+        x: origin.x + dx * maxDistance,
+        y: origin.y + dy * maxDistance,
+        z: origin.z + dz * maxDistance,
+      },
+    };
+  }
+
+  /**
    * Is this point inside a wall, a floor slab, or under the terrain?
    *
    * Used by the third-person camera boom, not by movement: the player capsule
@@ -243,28 +328,7 @@ export class WorldCollision implements MotorCollision {
    */
   isInsideSolid(x: number, y: number, z: number): boolean {
     if (y <= this.field.sample(x, z)) return true;
-
-    for (const piece of this.piecesNear(x, y, z)) {
-      const box = wallBox(piece.cell, piece.slot);
-      if (box) {
-        if (
-          x > box.minX && x < box.maxX &&
-          y > box.minY && y < box.maxY &&
-          z > box.minZ && z < box.maxZ
-        ) {
-          return true;
-        }
-        continue;
-      }
-      // Floors, ramps and cones are height queries rather than boxes, so
-      // "inside" means below the surface they present and within their cell.
-      const surface = surfaceHeight(piece, x, z);
-      const base = cellToWorld(piece.cell);
-      if (surface !== undefined && y < surface && y > base.y - SLAB_HALF_THICKNESS) {
-        return true;
-      }
-    }
-    return false;
+    return this.pieceAt(x, y, z) !== undefined;
   }
 
   /** Does this cell intersect terrain? Used as the build system's ground test. */

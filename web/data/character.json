@@ -390,6 +390,80 @@
           ]
         }
       ]
+    },
+    {
+      "id": "upper.fire",
+      "displayName": "Fire",
+      "description": "A short muzzle rise and settle. Brief on purpose: at 600 rpm this replays ten times a second, so anything longer would read as a spasm rather than as recoil.",
+      "mask": [
+        "ArmRight",
+        "ArmLeft",
+        "Chest"
+      ],
+      "durationSeconds": 0.14,
+      "loop": false,
+      "keyframes": [
+        {
+          "time": 0.0,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -52
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -34
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -8
+            }
+          ]
+        },
+        {
+          "time": 0.25,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -36
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -22
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -12
+            }
+          ]
+        },
+        {
+          "time": 1.0,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -52
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -34
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -8
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -241,6 +241,42 @@ describe("weapon firing", () => {
     expect(tryFire(state, ar, ready, TICK_RATE, true)).toBe(FireRejection.None);
   });
 
+  it("says nothing happened when the trigger is not down", () => {
+    // The distinction this pins: FireRejection.None means a round left the
+    // barrel. Conflating it with "no input" had the sandbox counting every idle
+    // tick as a shot -- animation, tracer and all -- without spending ammo.
+    const ar = blueprints().weapon("weapon.assaultRifle");
+    const state = freshWeaponState(ar);
+
+    expect(tryFire(state, ar, 10, TICK_RATE, false)).toBe(FireRejection.TriggerReleased);
+    expect(state.ammoInMagazine).toBe(ar.magazineSize);
+
+    expect(tryFire(state, ar, 11, TICK_RATE, true)).toBe(FireRejection.None);
+    expect(state.ammoInMagazine).toBe(ar.magazineSize - 1);
+  });
+
+  it("never reports None without spending a round", () => {
+    // Swept across the fire modes, because each takes a different path through
+    // tryFire and only one of them used to be wrong.
+    for (const id of ["weapon.assaultRifle", "weapon.pistol", "weapon.shotgun"]) {
+      const weapon = blueprints().weapon(id);
+      const state = freshWeaponState(weapon);
+      let fired = 0;
+      for (let tick = 0; tick < 200; tick++) {
+        // Trigger down only every third tick, so releases are interleaved.
+        const down = tick % 3 !== 0;
+        const before = state.ammoInMagazine;
+        if (tryFire(state, weapon, tick, TICK_RATE, down) === FireRejection.None) {
+          fired++;
+          expect(state.ammoInMagazine, `${id} at tick ${tick}`).toBe(before - 1);
+        } else {
+          expect(state.ammoInMagazine, `${id} at tick ${tick}`).toBe(before);
+        }
+      }
+      expect(fired, id).toBeGreaterThan(0);
+    }
+  });
+
   it("accumulates bloom and recovers it", () => {
     const ar = weapon("weapon.assaultRifle");
     const state = freshWeaponState(ar);

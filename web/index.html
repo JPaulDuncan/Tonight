@@ -45,6 +45,13 @@
       }
       .hud-stat span { color: var(--ink); font-weight: 600; }
 
+      .hud-weapon {
+        position: absolute; right: 16px; bottom: 96px; text-align: right;
+        font-size: 13px; color: var(--muted); letter-spacing: 0.02em;
+      }
+      .hud-weapon #hud-weapon-name { display: block; color: var(--ink); font-weight: 600; }
+      .hud-ammo { font-variant-numeric: tabular-nums; }
+
       .hud-bottom-left {
         position: absolute; left: 50%; bottom: 24px;
         transform: translateX(-50%); width: 280px;
@@ -116,8 +123,10 @@
         <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> wall / floor / ramp / cone</div>
         <div><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> wood / stone / metal</div>
         <div>Left-click: place, or swing the pickaxe</div>
+        <div><kbd>1</kbd>&hairsp;…&hairsp;<kbd>6</kbd> pick a weapon (out of build mode)</div>
+        <div><kbd>R</kbd> reload &middot; left-click to fire or swing</div>
         <div>Hold <kbd>G</kbd> and sweep the crosshair: edit a wall you own</div>
-        <div><kbd>T</kbd> revert an edit &middot; <kbd>R</kbd> reset the world</div>
+        <div><kbd>T</kbd> revert an edit &middot; <kbd>Backspace</kbd> reset the world</div>
         <p>Click the view to capture the mouse. Esc releases it.</p>
       </div>
     </div>

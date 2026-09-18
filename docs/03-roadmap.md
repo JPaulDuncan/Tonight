@@ -119,7 +119,6 @@ Weapons, damage, loot. Still single-player, against dummies.
 - [x] Chests and floor spawns populate a POI, reproducibly from the match seed.
 - [~] Inventory: slots, stacking and ammo counters are ported from the Unity
       version but not yet re-tested or wired to the sandbox.
-- [ ] Damage numbers and hit markers.
 - [x] Edit variants render, and editing is wired to input: hold, drag a 3x3
       selection, release. The doorway mesh loads and the HUD names the variant.
 - [x] The character walks. The cycle is a Blueprint, phase-driven by distance
@@ -130,8 +129,12 @@ Weapons, damage, loot. Still single-player, against dummies.
       ADR-0004 gives for models.
 - [x] Upper-body animation, layered over locomotion by a mask: carry, swing and
       build, with the held pickaxe parented to the arm that swings it.
-- [ ] Firing. The five firearms load, are textured and have carry poses, but
-      nothing equips or fires them: combat is tested and not yet playable.
+- [x] Weapons equip and fire. Number keys swap, the trigger respects fire mode,
+      magazine and cooldown, shots trace against structures and props, and the
+      HUD shows the magazine. Bloom, which had shipped inert on every weapon,
+      now costs accuracy under sustained fire.
+- [ ] Damage numbers and hit markers. A shot registers and a wall falls, but
+      nothing tells the player how much they did.
 - [ ] Weapons usable in the sandbox — the firing code has no trigger bound to it
       yet, so combat is tested but not playable.
 - [x] **A new weapon needs one JSON entry and one mesh.**
@@ -235,16 +238,14 @@ networking, no other players, and no match flow.
 
 The next tasks, in order:
 
-1. Bind weapons to the sandbox — fire, reload, hit structures. Combat is already
-   tested, so this is wiring rather than design.
-2. Run the storm live in the sandbox with the night-clock lighting arc driving
+1. Run the storm live in the sandbox with the night-clock lighting arc driving
    the scene. The director works; the renderer ignores it.
-3. Re-port inventory, squads and match flow from the Unity branch. The logic is
+2. Re-port inventory, squads and match flow from the Unity branch. The logic is
    written and was reviewed; it needs translating and re-testing.
-4. Instanced rendering for build pieces, then measure. This is the gate — and
+3. Instanced rendering for build pieces, then measure. This is the gate — and
    now measurable against the real meshes rather than against boxes, which
    matters because a generated wall is 408 vertices where a box was 24.
-5. Only then the authoritative server.
+4. Only then the authoritative server.
 
 ## Honest risks
 

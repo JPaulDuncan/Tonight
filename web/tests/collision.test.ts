@@ -139,3 +139,95 @@ describe("collision at height", () => {
     ).toBe(true);
   });
 });
+
+describe("shot trace", () => {
+  let field: Heightfield;
+  let structure: BuildStructure;
+  let collision: WorldCollision;
+  let cellY: number;
+  let groundY: number;
+
+  beforeEach(() => {
+    field = new Heightfield(SANDBOX_TERRAIN);
+    structure = new BuildStructure(() => true);
+    collision = new WorldCollision(field, structure);
+    cellY = Math.ceil((field.sample(CELL_SIZE / 2, CELL_SIZE / 2) + 1) / CELL_SIZE);
+    groundY = cellY * CELL_SIZE;
+  });
+
+  const wall = (x: number, y: number, z: number, slot: BuildSlot) => ({
+    cell: cell(x, y, z), slot, pieceId: "piece.wall", materialId: "material.wood",
+    ownerId: 1, placedTick: 0, damageTaken: 0, editMask: SOLID_MASK,
+  });
+
+  it("reports the wall it hits, and which one", () => {
+    structure.tryAdd(wall(0, cellY, 0, BuildSlot.NorthFace));
+    const hit = collision.trace(
+      { x: CELL_SIZE / 2, y: groundY + 2, z: CELL_SIZE - 3 }, { x: 0, y: 0, z: 1 }, 50,
+    );
+    expect(hit.kind).toBe("structure");
+    expect(hit.cell).toEqual(cell(0, cellY, 0));
+    expect(hit.slot).toBe(BuildSlot.NorthFace);
+    // The face is at z = CELL_SIZE, three metres ahead of the origin.
+    expect(hit.distance).toBeCloseTo(3, 0);
+  });
+
+  it("stops at the nearest wall, not one behind it", () => {
+    structure.tryAdd(wall(0, cellY, 0, BuildSlot.NorthFace)); // z = 4
+    structure.tryAdd(wall(0, cellY, 1, BuildSlot.NorthFace)); // z = 8
+    const hit = collision.trace(
+      { x: CELL_SIZE / 2, y: groundY + 2, z: 1 }, { x: 0, y: 0, z: 1 }, 50,
+    );
+    expect(hit.cell?.z).toBe(0);
+  });
+
+  it("hits terrain when nothing is built", () => {
+    // Fired downward into the ground.
+    const hit = collision.trace(
+      { x: 0, y: field.sample(0, 0) + 5, z: 0 }, { x: 0, y: -1, z: 0 }, 50,
+    );
+    expect(hit.kind).toBe("terrain");
+    expect(hit.distance).toBeLessThan(6);
+  });
+
+  it("reports nothing when the shot flies off into the sky", () => {
+    const hit = collision.trace(
+      { x: 0, y: field.sample(0, 0) + 5, z: 0 }, { x: 0, y: 1, z: 0 }, 50,
+    );
+    expect(hit.kind).toBe("none");
+    expect(hit.distance).toBe(50);
+  });
+
+  it("respects the maximum distance", () => {
+    structure.tryAdd(wall(0, cellY, 4, BuildSlot.NorthFace)); // z = 20
+    const near = collision.trace(
+      { x: CELL_SIZE / 2, y: groundY + 2, z: 1 }, { x: 0, y: 0, z: 1 }, 10,
+    );
+    expect(near.kind).toBe("none");
+  });
+
+  it("does not step through a slab", () => {
+    // A slab is 0.24 m thick. A trace whose step exceeded that would pass
+    // straight through a wall and hit whatever was behind it -- bullets that
+    // ignore cover would make building pointless.
+    structure.tryAdd(wall(0, cellY, 0, BuildSlot.NorthFace));
+    for (let offset = -1.5; offset <= 1.5; offset += 0.17) {
+      const hit = collision.trace(
+        { x: CELL_SIZE / 2 + offset * 0.4, y: groundY + 2 + offset * 0.3, z: 0.5 },
+        { x: 0, y: 0, z: 1 },
+        30,
+      );
+      expect(hit.kind, `offset ${offset.toFixed(2)}`).toBe("structure");
+    }
+  });
+
+  it("normalises the direction it is given", () => {
+    // A caller passing an unnormalised aim vector must not get a trace that
+    // runs at the wrong speed and reports a distance in the wrong units.
+    structure.tryAdd(wall(0, cellY, 0, BuildSlot.NorthFace));
+    const origin = { x: CELL_SIZE / 2, y: groundY + 2, z: CELL_SIZE - 3 };
+    const unit = collision.trace(origin, { x: 0, y: 0, z: 1 }, 50);
+    const long = collision.trace(origin, { x: 0, y: 0, z: 7 }, 50);
+    expect(long.distance).toBeCloseTo(unit.distance, 6);
+  });
+});

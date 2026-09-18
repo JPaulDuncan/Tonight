@@ -63,6 +63,27 @@ currentBloom   -= BloomRecoveryPerSecond * dt while not firing
 FirstShotAccurate: when currentBloom == 0, the shot is dead centre
 ```
 
+**Recovery is a flat rate, not a proportion**, which makes the two numbers
+fight rather than settle: bloom either outruns recovery and pins at the cap, or
+recovery outruns it and bloom never leaves zero. There is no equilibrium in
+between, so a weapon's `bloomPerShot x fireRateRpm / 60` must exceed its
+`bloomRecoveryPerSecond` or the mechanic is inert.
+
+Every bloom weapon shipped inert until the weapons were first fired: the
+assault rifle gained 1.47 deg/s while firing and lost 4. The code applied bloom
+correctly and a unit test covered it — what nothing checked was the two rates
+against each other. `validateLibrary` now does, and rejects the combination with
+the arithmetic in the message.
+
+The numbers are tuned so sustained fire reaches the cap in roughly the time a
+magazine lasts, and stopping clears it in about a second:
+
+| Weapon | Gained | Recovered | To cap | Clears in |
+| --- | --- | --- | --- | --- |
+| Assault rifle | 6.0 deg/s | 4 deg/s | 1.5 s | 0.8 s |
+| SMG | 7.8 deg/s | 4 deg/s | 1.2 s | 1.1 s |
+| Pistol | 5.8 deg/s | 4 deg/s | 2.0 s | 0.9 s |
+
 Shotguns express through `pelletCount > 1` plus a wide `spreadDegrees`. There is
 no shotgun code path — pellet count is a loop bound.
 
@@ -163,6 +184,8 @@ last living squad member eliminated → all DBNO squadmates eliminated
 | Falloff boundaries | Unit | Exact values at start, end, and beyond; monotonic between |
 | Shield ordering | Unit | Shield absorbs first; penetration splits correctly; no negative pools |
 | Bloom | Unit | Accumulates to cap, recovers to zero, first shot accurate at rest |
+| Bloom is not inert | Unit | Gain rate exceeds recovery, so sustained fire actually costs accuracy |
+| A shot is a shot | Unit | `tryFire` returns `None` only when a round was spent |
 | Pellet determinism | Unit | Same seed and shot index ⇒ identical pellet directions |
 | Fire scheduling | Unit | Rate honoured for each mode; burst requires re-press |
 | Lag compensation | Integration (M4) | A hit on a rewound position registers; a 300 ms-late shot compensates only 250 ms |

@@ -21,6 +21,11 @@ export interface HudModel {
   readonly pieceCount: number;
   readonly fps: number;
   readonly lastMessage: string;
+  readonly weaponName: string;
+  /** Rounds in the magazine, or -1 for a weapon that does not use ammo. */
+  readonly ammoInMagazine: number;
+  readonly magazineSize: number;
+  readonly reloading: boolean;
 }
 
 const PIECE_KEYS: readonly { id: string; key: string; label: string }[] = [
@@ -48,6 +53,10 @@ export class Hud {
         <div class="hud-stat"><span id="hud-fps">--</span> fps</div>
         <div class="hud-stat"><span id="hud-pieces">0</span> pieces</div>
       </div>
+      <div class="hud-weapon" id="hud-weapon">
+        <span id="hud-weapon-name">--</span>
+        <span class="hud-ammo" id="hud-ammo"></span>
+      </div>
       <div class="hud-bottom-left">
         <div class="hud-bar"><div class="hud-bar-fill shield" id="hud-shield"></div></div>
         <div class="hud-bar"><div class="hud-bar-fill health" id="hud-health"></div></div>
@@ -67,6 +76,17 @@ export class Hud {
     this.setText("hud-fps", String(Math.round(model.fps)));
     this.setText("hud-pieces", String(model.pieceCount));
     this.setText("hud-message", model.lastMessage);
+    this.setText("hud-weapon-name", model.weaponName);
+    // A melee weapon shows no counter at all rather than a zero, which would
+    // read as an empty gun.
+    this.setText(
+      "hud-ammo",
+      model.ammoInMagazine < 0
+        ? ""
+        : model.reloading
+          ? "reloading"
+          : `${model.ammoInMagazine} / ${model.magazineSize}`,
+    );
 
     const materials = this.root.querySelector("#hud-materials");
     if (materials) {

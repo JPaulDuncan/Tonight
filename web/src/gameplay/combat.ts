@@ -151,6 +151,16 @@ export enum FireRejection {
   /** Semi-auto, bolt-action, or a spent burst: the trigger must be released. */
   RequiresTriggerRelease = "requiresTriggerRelease",
   NoWeapon = "noWeapon",
+  /**
+   * The trigger is not down, so there was nothing to do.
+   *
+   * Distinct from `None` on purpose. This used to return `None`, which made
+   * "a shot happened" and "no input this tick" indistinguishable to a caller:
+   * the sandbox counted every idle tick as a shot, played the fire animation
+   * and drew a tracer, all without consuming a round. A caller must be able to
+   * tell the two apart, so `None` now means exactly one thing -- a shot.
+   */
+  TriggerReleased = "triggerReleased",
 }
 
 /**
@@ -211,7 +221,12 @@ function completeReload(state: WeaponState, weapon: WeaponBlueprint): void {
   state.ammoInMagazine = weapon.magazineSize;
 }
 
-/** Attempt to fire. Mutates `state` on a successful shot. */
+/**
+ * Attempt to fire. Mutates `state` on a successful shot.
+ *
+ * Returns `FireRejection.None` **only** when a round was actually fired. Every
+ * other outcome, including "the trigger is not down", has its own value.
+ */
 export function tryFire(
   state: WeaponState,
   weapon: WeaponBlueprint | undefined,
@@ -226,7 +241,7 @@ export function tryFire(
     // Releasing ends a burst and re-arms semi-auto.
     state.triggerHeld = false;
     state.shotsThisTrigger = 0;
-    return FireRejection.None;
+    return FireRejection.TriggerReleased;
   }
 
   state.triggerHeld = true;

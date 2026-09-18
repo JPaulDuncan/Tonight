@@ -95,7 +95,7 @@ const after = await page.evaluate(() => ({
 // Reset and rebuild. Shared loaded geometry means removing a piece must not
 // free the buffers every other piece of that kind is drawing, and a place ->
 // remove -> place cycle is the cheapest way to catch it.
-await page.keyboard.press("KeyR");
+await page.keyboard.press("Backspace");
 await page.waitForTimeout(300);
 const afterReset = await page.evaluate(
   () => window.__tonight?.describePieces?.().length ?? -1,
@@ -216,12 +216,97 @@ console.log(`carrying while walking: arm spread ${armSpread.toFixed(3)}, leg spr
 if (armSpread > 0.05) errors.push(`the carried arm still swings (${armSpread.toFixed(2)} rad)`);
 if (legSpread < 0.2) errors.push("the legs stopped walking while carrying");
 
+// Weapons: equip, fire, spend ammo, reload, and damage what is in front.
+await ensureBuildMode(false);
+const weaponState = () => page.evaluate(() => window.__tonight?.describeWeapon?.());
+
+const idleBefore = await weaponState();
+await page.keyboard.press("Digit2");          // assault rifle
+await page.waitForTimeout(700);
+const equipped = await weaponState();
+console.log("equipped:", JSON.stringify(equipped));
+
+if (!equipped || equipped.id !== "weapon.assaultRifle") {
+  errors.push(`number key did not equip the rifle (held ${equipped?.id})`);
+} else if (equipped.heldParts < 2) {
+  errors.push("the rifle mesh did not attach to the hand");
+}
+
+// Idling with a weapon out must not fire it. tryFire once returned the same
+// value for "fired" and "no trigger", so the sandbox shot continuously without
+// spending ammo; this is the regression check for that.
+if (equipped && equipped.shotsFired > (idleBefore?.shotsFired ?? 0)) {
+  errors.push("the rifle fired without the trigger being pressed");
+}
+
+await page.mouse.down();
+await page.waitForTimeout(900);
+await page.mouse.up();
+await page.waitForTimeout(250);
+const sprayed = await weaponState();
+console.log("after a burst:", JSON.stringify(sprayed));
+
+if (sprayed.shotsFired <= equipped.shotsFired) errors.push("holding the trigger fired nothing");
+if (sprayed.ammo >= equipped.ammo) {
+  errors.push(`firing did not spend ammo (${equipped.ammo} -> ${sprayed.ammo})`);
+}
+// Auto fire at 550 rpm is about nine rounds a second: a shot every tick would
+// be roughly thirty, and would empty the magazine in one press.
+const roundsSpent = equipped.ammo - sprayed.ammo;
+if (roundsSpent > 20) errors.push(`fired ${roundsSpent} rounds in 0.9s - the cooldown is not holding`);
+
+await page.keyboard.press("KeyR");
+await page.waitForTimeout(2600);
+const reloaded = await weaponState();
+if (reloaded.ammo !== reloaded.magazine) {
+  errors.push(`reload left ${reloaded.ammo} of ${reloaded.magazine}`);
+}
+
+// One press of a bolt-action is one shell, and a shell is all its pellets.
+await page.keyboard.press("Digit3");          // shotgun
+await page.waitForTimeout(800);
+const beforeShell = await weaponState();
+await page.mouse.down();
+await page.waitForTimeout(70);
+await page.mouse.up();
+await page.waitForTimeout(250);
+const afterShell = await weaponState();
+const shells = beforeShell.ammo - afterShell.ammo;
+const pellets = afterShell.pelletsFired - beforeShell.pelletsFired;
+console.log(`shotgun: ${shells} shell, ${pellets} pellets (pelletCount ${afterShell.pelletCount})`);
+if (shells !== 1) errors.push(`one press fired ${shells} shells from a bolt-action`);
+if (pellets !== afterShell.pelletCount) {
+  errors.push(`a shell fired ${pellets} pellets, expected ${afterShell.pelletCount}`);
+}
+
+// And a shot has to actually hurt a structure: build a wall and shoot it away.
+await ensureBuildMode(true);
+await page.keyboard.press("Digit1"); await page.waitForTimeout(120);
+await page.keyboard.press("KeyZ"); await page.waitForTimeout(120);
+await page.mouse.click(640, 360); await page.waitForTimeout(350);
+const builtCount = (await page.evaluate(() => window.__tonight?.describePieces?.() ?? [])).length;
+await ensureBuildMode(false);
+await page.keyboard.press("Digit2"); await page.waitForTimeout(700);
+
+await page.mouse.down();
+let hitStructure = false;
+for (let i = 0; i < 14; i++) {
+  await page.waitForTimeout(130);
+  const now = await weaponState();
+  if (now.structureHits > afterShell.structureHits) { hitStructure = true; break; }
+}
+await page.mouse.up();
+await page.waitForTimeout(200);
+const remaining = (await page.evaluate(() => window.__tonight?.describePieces?.() ?? [])).length;
+console.log(`structure fire: built ${builtCount}, remaining ${remaining}, registered a hit: ${hitStructure}`);
+if (!hitStructure) errors.push("firing at a wall registered no structure hit");
+
 // Every material the player can build with has its texture bound. A missing map
 // is a flat-colour wall: easy to miss by eye, trivial to assert.
 //
 // On a cleared world, because the materials are created lazily when a piece is
 // first placed and a congested area silently rejects the placement.
-await page.keyboard.press("KeyR");
+await page.keyboard.press("Backspace");
 await page.waitForTimeout(300);
 // One material per piece *type* rather than per direction: a wall, a floor and
 // a ramp occupy three different slots of the same cell, so all three place
@@ -250,8 +335,9 @@ if (buildMaterials.length < 3) {
 
 // Swap back to a wall and put one directly ahead, so the edit phase below has a
 // known piece under the crosshair rather than whatever the box-building left.
-await page.keyboard.press("KeyR");
+await page.keyboard.press("Backspace");
 await page.waitForTimeout(300);
+await ensureBuildMode(true);
 await page.keyboard.press("Digit1");
 await page.waitForTimeout(150);
 await page.mouse.click(640, 360);
@@ -265,6 +351,26 @@ await page.waitForTimeout(400);
 // path that breaks the first time the field of view changes.
 const subCellNow = () =>
   page.evaluate(() => window.__tonight?.describeEdit?.().target ?? { found: false });
+
+/**
+ * Put the game into (or out of) build mode, rather than assuming.
+ *
+ * The number row means pieces while building and weapons otherwise, so a phase
+ * that assumes the mode silently selects the wrong thing: Digit1 either picks a
+ * wall or equips the pickaxe, and a click either places or swings.
+ */
+async function ensureBuildMode(on) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const inBuildMode = await page.evaluate(
+      () => Boolean(document.querySelector(".hud-piece.selected:not(.dimmed)")),
+    );
+    if (inBuildMode === on) return true;
+    await page.keyboard.press("KeyQ");
+    await page.waitForTimeout(180);
+  }
+  errors.push(`could not get into build mode = ${on}`);
+  return false;
+}
 
 async function aimAtSubCell(wanted) {
   // One sub-cell is 1.33 m across a wall 8 m away, so roughly ten degrees of

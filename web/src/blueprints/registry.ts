@@ -203,6 +203,25 @@ export function validateLibrary(library: BlueprintLibrary): Finding[] {
       warn("A multi-pellet weapon with zero spread fires every pellet along one line.", w.id);
     }
     if (w.spreadDegrees > 10) warn("spreadDegrees above 10 is outside the design band.", w.id);
+
+    // Bloom that recovery outpaces is decoration: the fields are authored, the
+    // code applies them, and sustained fire is still perfectly accurate. Every
+    // bloom weapon shipped this way until the weapons were actually fired,
+    // because nothing compared the two rates against each other.
+    if (w.bloomMaxDegrees > 0) {
+      const shotsPerSecond = w.fireRateRpm / 60;
+      const gainedPerSecond = w.bloomPerShot * shotsPerSecond;
+      if (gainedPerSecond <= w.bloomRecoveryPerSecond) {
+        error(
+          `Bloom can never accumulate: firing adds ${gainedPerSecond.toFixed(2)} deg/s and ` +
+            `recovery removes ${w.bloomRecoveryPerSecond}. Raise bloomPerShot or lower ` +
+            "bloomRecoveryPerSecond, or set bloomMaxDegrees to 0 to say it is deliberate.",
+          w.id,
+        );
+      } else if (w.bloomPerShot <= 0) {
+        error("bloomMaxDegrees is set but bloomPerShot is zero.", w.id);
+      }
+    }
     requireRef(w.damageProfileId, w.id, "damageProfileId");
     requireRef(w.recoilProfileId, w.id, "recoilProfileId");
   }
