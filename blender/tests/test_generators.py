@@ -104,10 +104,21 @@ class TestEditVariants:
             wall_variant(MATERIALS[0], (False,) * 9, "Nothing")
 
 
+def _weapon_length(proportions) -> float:
+    """A weapon's long axis, in metres.
+
+    Blender **Y**, not X. Parts are assembled along +X and the assembled weapon
+    is then turned onto -Y so it points where its holder faces (glTF +Z). These
+    tests are about silhouette, so they follow the barrel wherever it ends up
+    rather than hardcoding the axis it was built on.
+    """
+    return firearm(proportions).size()[1]
+
+
 class TestWeapons:
     @pytest.mark.parametrize("proportions", WEAPONS, ids=lambda p: p.key)
     def test_weapons_are_plausibly_sized(self, proportions):
-        length, width, height = firearm(proportions).size()
+        width, length, height = firearm(proportions).size()
         assert 0.15 < length < 2.0, f"{proportions.key} is {length:.2f} m long"
         assert width < 0.30
         assert height < 0.60
@@ -115,16 +126,16 @@ class TestWeapons:
     def test_silhouettes_are_distinguishable_by_length(self):
         # Pillar 3: a player must tell an SMG from a sniper at a glance, at
         # distance, in deep night. Length is most of that read.
-        lengths = {p.key: firearm(p).size()[0] for p in WEAPONS}
+        lengths = {p.key: _weapon_length(p) for p in WEAPONS}
         assert lengths["Sniper"] > lengths["AssaultRifle"] > lengths["Smg"] > lengths["Pistol"]
 
     def test_sniper_is_clearly_longer_than_every_other_class(self):
-        sniper_length = firearm(SNIPER).size()[0]
-        others = [firearm(p).size()[0] for p in WEAPONS if p is not SNIPER]
+        sniper_length = _weapon_length(SNIPER)
+        others = [_weapon_length(p) for p in WEAPONS if p is not SNIPER]
         assert sniper_length > max(others) * 1.2
 
     def test_smg_is_stubby_relative_to_the_rifle(self):
-        assert firearm(SMG).size()[0] < 0.6
+        assert _weapon_length(SMG) < 0.6
 
     def test_pistol_is_the_smallest(self):
         assert firearm(PISTOL).size()[0] == min(firearm(p).size()[0] for p in WEAPONS)

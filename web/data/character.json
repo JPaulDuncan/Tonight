@@ -166,5 +166,230 @@
         }
       ]
     }
+  ],
+  "upperBody": [
+    {
+      "id": "upper.carry",
+      "displayName": "Carry",
+      "description": "Holding a tool at the ready. Static, so the arms stop swinging the moment something is in them -- which is most of a match.",
+      "mask": [
+        "ArmRight",
+        "ArmLeft",
+        "Chest"
+      ],
+      "durationSeconds": 0,
+      "loop": true,
+      "keyframes": [
+        {
+          "time": 0,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -52
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -34
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "upper.swing",
+      "displayName": "Pickaxe swing",
+      "description": "Wind up, strike, recover. Timed rather than distance-driven: a swing takes as long as it takes however fast the player is moving.",
+      "mask": [
+        "ArmRight",
+        "ArmLeft",
+        "Chest",
+        "Head"
+      ],
+      "durationSeconds": 0.55,
+      "loop": false,
+      "keyframes": [
+        {
+          "time": 0.0,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -52
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -34
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -8
+            },
+            {
+              "part": "Head",
+              "axis": "y",
+              "degrees": 0
+            }
+          ]
+        },
+        {
+          "time": 0.3,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -145
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -70
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -26
+            },
+            {
+              "part": "Head",
+              "axis": "y",
+              "degrees": -10
+            }
+          ]
+        },
+        {
+          "time": 0.55,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": 38
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -12
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": 18
+            },
+            {
+              "part": "Head",
+              "axis": "y",
+              "degrees": 6
+            }
+          ]
+        },
+        {
+          "time": 1.0,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -52
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -34
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -8
+            },
+            {
+              "part": "Head",
+              "axis": "y",
+              "degrees": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "upper.build",
+      "displayName": "Place a piece",
+      "description": "A short forward push. Building is the pillar, so it needs a read of its own rather than sharing the swing.",
+      "mask": [
+        "ArmRight",
+        "ArmLeft",
+        "Chest"
+      ],
+      "durationSeconds": 0.3,
+      "loop": false,
+      "keyframes": [
+        {
+          "time": 0.0,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -52
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -34
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -8
+            }
+          ]
+        },
+        {
+          "time": 0.35,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -92
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -86
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": 0
+            }
+          ]
+        },
+        {
+          "time": 1.0,
+          "pose": [
+            {
+              "part": "ArmRight",
+              "axis": "x",
+              "degrees": -52
+            },
+            {
+              "part": "ArmLeft",
+              "axis": "x",
+              "degrees": -34
+            },
+            {
+              "part": "Chest",
+              "axis": "y",
+              "degrees": -8
+            }
+          ]
+        }
+      ]
+    }
   ]
 }

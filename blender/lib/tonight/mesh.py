@@ -60,6 +60,11 @@ class MeshData:
     #: behaviour-from-content anti-pattern in miniature.
     pivots: dict[str, Vec3] = field(default_factory=dict)
 
+    #: Named attachment points, in Blender coordinates: where a weapon meets a
+    #: hand, and where a weapon's grip is. Like pivots, these are anatomy the
+    #: generator knows and the renderer would otherwise have to guess.
+    sockets: dict[str, Vec3] = field(default_factory=dict)
+
     # ---------------------------------------------------------------- basics
 
     @property
@@ -109,7 +114,9 @@ class MeshData:
         result.vertices = [
             (v[0] + offset[0], v[1] + offset[1], v[2] + offset[2]) for v in self.vertices
         ]
-        return result
+        return result.with_points_mapped(
+            lambda p: (p[0] + offset[0], p[1] + offset[1], p[2] + offset[2])
+        )
 
     def scaled(self, factor: Vec3 | float) -> "MeshData":
         if isinstance(factor, (int, float)):
@@ -118,7 +125,10 @@ class MeshData:
         result.vertices = [
             (v[0] * factor[0], v[1] * factor[1], v[2] * factor[2]) for v in self.vertices
         ]
-        return result
+        scale = factor
+        return result.with_points_mapped(
+            lambda p: (p[0] * scale[0], p[1] * scale[1], p[2] * scale[2])
+        )
 
     def rotated_z(self, degrees: float) -> "MeshData":
         """Rotate about the Z axis. Z is up in Blender, so this is yaw."""
@@ -129,6 +139,21 @@ class MeshData:
             (v[0] * cos_a - v[1] * sin_a, v[0] * sin_a + v[1] * cos_a, v[2])
             for v in self.vertices
         ]
+        return result.with_points_mapped(
+            lambda p: (p[0] * cos_a - p[1] * sin_a, p[0] * sin_a + p[1] * cos_a, p[2])
+        )
+
+    def with_points_mapped(self, transform) -> "MeshData":
+        """Apply a transform to every pivot and socket.
+
+        Every geometry transform must go through this. A mesh whose vertices
+        moved but whose sockets did not is a weapon that turns out to be held a
+        hand's width from the hand, and the silence of that failure is the whole
+        reason this is one method rather than three copies of the same loop.
+        """
+        result = self.copy()
+        result.pivots = {name: transform(point) for name, point in self.pivots.items()}
+        result.sockets = {name: transform(point) for name, point in self.sockets.items()}
         return result
 
     def copy(self) -> "MeshData":
@@ -139,6 +164,7 @@ class MeshData:
             name=self.name,
             face_groups=list(self.face_groups),
             pivots=dict(self.pivots),
+            sockets=dict(self.sockets),
         )
 
     # ----------------------------------------------------------------- merge
@@ -161,6 +187,7 @@ class MeshData:
             other.face_groups if other.face_groups else [other.name] * len(other.faces)
         )
         result.pivots.update(other.pivots)
+        result.sockets.update(other.sockets)
         return result
 
     @staticmethod

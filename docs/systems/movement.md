@@ -51,6 +51,23 @@ The boom is shortened when it would sit inside terrain or a build piece.
 Without that, backing into a wall puts the camera on the far side of it and the
 player sees the inside of their own base.
 
+## 1b. Animation layers
+
+Two layers, combined by a mask.
+
+| Layer | Drives | Timed by |
+| --- | --- | --- |
+| Locomotion | Legs, and the arms when nothing is held | Distance travelled |
+| Upper body | The parts in the active clip's mask | Seconds |
+
+A masked part takes the clip's rotation **instead of** the walk's, not on top of
+it. Both are Blueprints (`LocomotionBlueprint`, `UpperBodyBlueprint`), so
+retiming a walk or giving a weapon its own hold is content.
+
+The split in timing is deliberate: a stride should track the ground, so it is
+driven by metres travelled and never skates; a swing should take the same time
+whether its owner is standing still or sprinting.
+
 ## 2. Values
 
 All from `MovementBlueprint`. GDD §3 holds the shipped defaults.

@@ -72,6 +72,7 @@ export function assetKey(name: string): string {
 
 export class ArtLibrary {
   private readonly parts = new Map<string, ArtPart[]>();
+  private readonly socketsByAsset = new Map<string, Record<string, [number, number, number]>>();
   private readonly textures = new Map<string, THREE.Texture>();
   private readonly merged = new Map<string, THREE.BufferGeometry>();
   private readonly byKey = new Map<string, string>();
@@ -146,6 +147,15 @@ export class ArtLibrary {
   private adopt(record: ArtRecord, scene: THREE.Object3D): void {
     const parts: ArtPart[] = [];
     scene.traverse((node) => {
+      // Sockets ride on the node's extras, which GLTFLoader puts on the
+      // userData of whichever object the node became -- a Group for a
+      // multi-primitive asset, the Mesh itself for a single-primitive one.
+      const sockets = node.userData?.["sockets"] as
+        | Record<string, [number, number, number]>
+        | undefined;
+      if (sockets) this.socketsByAsset.set(record.name, sockets);
+    });
+    scene.traverse((node) => {
       if (!(node instanceof THREE.Mesh)) return;
       const geometry = node.geometry as THREE.BufferGeometry;
       // The writer records the part role in the primitive's `extras`. GLTFLoader
@@ -211,6 +221,17 @@ export class ArtLibrary {
     return geometry;
   }
 
+  /**
+   * A named attachment point on an asset, in glTF space.
+   *
+   * `GripRight` on a character is where a weapon is held; `Grip` on a weapon is
+   * the part of it that meets the hand. Matching the two is what lets any
+   * weapon be attached without a per-weapon transform in the renderer.
+   */
+  socket(assetName: string, socket: string): [number, number, number] | undefined {
+    return this.socketsByAsset.get(assetName)?.[socket];
+  }
+
   /** Resolve an asset by its derived key, e.g. `wall/wood`. */
   nameForKey(key: string): string | undefined {
     return this.byKey.get(key);
@@ -232,6 +253,19 @@ export class ArtLibrary {
  * `materialKind` -- so a new material or a new piece is content, not code. An
  * edit variant appends its name, matching how the generator names variants.
  */
+/**
+ * The art key for a weapon Blueprint.
+ *
+ * `weapon.assaultRifle` keys as `assaultrifle`, which is what
+ * `SM_Weapon_AssaultRifle` derives to. Both sides derive their key from their
+ * own name rather than one hardcoding the other's, so a rename fails loudly at
+ * boot instead of quietly missing.
+ */
+export function weaponAssetKey(blueprintId: string): string {
+  const name = blueprintId.split(".").slice(1).join(".");
+  return name.toLowerCase();
+}
+
 export function buildPieceKey(
   placement: string,
   materialKind: string,

@@ -103,9 +103,15 @@ def _grip(proportions: WeaponProportions) -> MeshData:
 def firearm(proportions: WeaponProportions) -> MeshData:
     """Assemble one firearm from the part kit.
 
-    The barrel runs along +X so that in the client -- after the Y-up conversion
-    at export -- the weapon points down the character's forward axis without a
-    per-asset rotation offset baked into the mesh.
+    Parts are assembled along +X because that is the natural axis to build a
+    gun on, then the whole thing is turned onto -Y at the end. Blender -Y is
+    glTF +Z, which is where the character faces, so a weapon attached to a hand
+    points where its holder does with no rotation applied in the client.
+
+    An earlier version of this docstring claimed +X *was* the forward axis. It
+    is not: Blender +X maps to glTF +X, which is the character's right. The
+    weapon would have pointed out sideways, and ``test_weapon_points_forward``
+    now pins the direction rather than asserting it in prose.
     """
     name = units.asset_name(units.PREFIX_STATIC_MESH, "Weapon", proportions.key)
     parts: list[MeshData] = []
@@ -181,7 +187,15 @@ def firearm(proportions: WeaponProportions) -> MeshData:
             )
         )
 
-    return MeshData.join(parts, name=name)
+    weapon = MeshData.join(parts, name=name)
+
+    # Where the hand holds it, taken from the grip part rather than guessed.
+    weapon.sockets = {
+        "Grip": (0.0, -0.01, -proportions.receiver_height / 2.0 - 0.055),
+    }
+
+    # +X -> -Y, which is glTF +Z: the direction the character faces.
+    return weapon.rotated_z(-90.0)
 
 
 def pickaxe() -> MeshData:
@@ -192,7 +206,14 @@ def pickaxe() -> MeshData:
     head = box(size=(0.34, 0.05, 0.06), centre=(0.0, 0.0, 0.30), name="Head")
     spike = box(size=(0.07, 0.045, 0.10), centre=(0.14, 0.0, 0.26), name="Spike")
 
-    return MeshData.join([haft, head, spike], name=name)
+    tool = MeshData.join([haft, head, spike], name=name)
+
+    # The haft runs up the Z axis, so the grip is its lower half. A pickaxe is
+    # held low on the shaft, not at its centre.
+    tool.sockets = {"Grip": (0.0, 0.0, -0.18)}
+
+    # As with firearms: the head swings toward glTF +Z, the way its holder faces.
+    return tool.rotated_z(-90.0)
 
 
 def _lay_along_x(mesh: MeshData) -> MeshData:

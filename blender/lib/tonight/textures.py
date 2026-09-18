@@ -333,6 +333,9 @@ SHIPPED: dict[str, "callable"] = {
     "T_Harvest_Bark": lambda: bark("bark", (110, 78, 50)),
     "T_Harvest_Canopy": lambda: foliage("canopy", (58, 92, 62), (86, 126, 78)),
     "T_Harvest_Rock": lambda: speckle("rock", (126, 126, 132), (152, 150, 146)),
+    # Finer than the build metal: a receiver is 30 cm across, so a panel the
+    # size of the one on a 4 m wall would read as a single flat plate.
+    "T_Weapon_Metal": lambda: panelled("weaponMetal", (96, 101, 110), (58, 62, 69), panels=8),
     "T_Character_Cloth": lambda: cloth("cloth", (86, 108, 150)),
     "T_Character_Skin": lambda: cloth("skin", (198, 164, 126)),
     "T_Terrain_Ground": lambda: speckle("ground", (86, 108, 68), (104, 124, 78)),

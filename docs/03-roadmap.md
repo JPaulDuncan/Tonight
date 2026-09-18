@@ -128,8 +128,10 @@ Weapons, damage, loot. Still single-player, against dummies.
 - [x] Procedural textures on build pieces, props and the character, named by
       Blueprint field. Generated rather than downloaded, for the same reasons
       ADR-0004 gives for models.
-- [ ] Upper-body and weapon animation. Locomotion only, so the character walks
-      with its arms swinging even while building.
+- [x] Upper-body animation, layered over locomotion by a mask: carry, swing and
+      build, with the held pickaxe parented to the arm that swings it.
+- [ ] Firing. The five firearms load, are textured and have carry poses, but
+      nothing equips or fires them: combat is tested and not yet playable.
 - [ ] Weapons usable in the sandbox — the firing code has no trigger bound to it
       yet, so combat is tested but not playable.
 - [x] **A new weapon needs one JSON entry and one mesh.**
@@ -251,7 +253,7 @@ The next tasks, in order:
 | WebGL at scale | The reason for the rescope. Thousands of build pieces plus 30 players needs instancing and culling that Unity gave us for free. Unmeasured. |
 | No networking yet | The largest unbuilt piece. The simulation is shaped for it — commands, determinism, shared validation — but shaped-for is not built. |
 | Collision is bespoke | Exact for axis-aligned pieces on a known grid, and deliberately limited beyond that. Terrain edge cases will surface. |
-| Art is bound, but thin | The client loads the generated glTF and procedural textures, and the character walks. It is all still stylised blocking geometry: flat, low-frequency surfaces on a blocky proxy, with one locomotion cycle and no upper-body or weapon animation at all. It reads at gameplay distance and will not survive a close-up. |
+| Art is bound, but thin | The client loads the generated glTF and procedural textures; the character walks, carries its pickaxe and swings it. It is all still stylised blocking geometry: flat, low-frequency surfaces on a blocky proxy, with one locomotion cycle and three short upper-body clips. It reads at gameplay distance and will not survive a close-up. |
 | Sandbox is not a match | Everything above M2 is tested in isolation, not in a running game. |
 
 ## Not scheduled

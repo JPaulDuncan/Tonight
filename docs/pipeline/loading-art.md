@@ -193,13 +193,63 @@ runs once per rendered frame and several simulation ticks can happen inside one,
 so dividing by the tick interval overstated speed by the ratio of the two --
 which pinned the forward lean at its cap at any frame rate below 30.
 
+## The held weapon
+
+A weapon hangs off the hand by matching two sockets, both emitted by the
+generators: the character's `GripRight` and the weapon's own `Grip`. The
+renderer subtracts one from the other and never needs to know what a pickaxe
+looks like or which way round it is.
+
+The hand node is a **child of the arm's joint**, so the weapon inherits the arm's
+rotation for free — a swing moves the pickaxe because the pickaxe is parented to
+the thing that swings. Attaching it to the avatar root instead would leave it
+hanging in the air while the arm swung away from it.
+
+Weapons are assembled along Blender +X and then turned onto −Y, which is glTF
++Z: the direction the character faces. An earlier version of the pipeline docs
+claimed +X *was* forward, which is wrong — Blender +X is glTF +X, the
+character's right — and a weapon left that way points out sideways from the
+hand. `test_weapons_point_the_way_their_holder_faces` pins it.
+
+Any transform on a `MeshData` carries its pivots and sockets with it
+(`with_points_mapped`). A mesh whose vertices moved but whose sockets did not is
+a weapon held a hand's width from the hand, and nothing about it looks wrong
+until you see it in a scene.
+
+## Upper-body clips
+
+The walk is one layer; what the arms are doing is another. An
+`UpperBodyBlueprint` carries a **mask** of the parts it owns, a duration, and
+keyframes; parts inside the mask take the clip's rotation *instead of* the
+walk's, and everything else keeps walking.
+
+That exclusivity is the point. Adding the layers would have the arms swinging
+while they hold a pickaxe overhead. Masking is also what lets one locomotion
+cycle serve every action, instead of needing a walk-and-swing, a run-and-swing
+and a crouch-and-swing.
+
+| Clip | When |
+| --- | --- |
+| `upper.carry` | Holding a tool. Static, which is most of a match. |
+| `upper.swing` | The pickaxe. Timed, 0.55 s: a swing takes as long as it takes however fast you are moving. |
+| `upper.build` | Placing a piece. Building is the pillar, so it gets a read of its own. |
+
+A weapon names its own `carryPoseId` and `usePoseId`, so a rifle that should not
+swing like a pickaxe is a JSON field rather than a branch. One-shot clips hold
+their last keyframe and then hand back to the carry pose, which is why the
+character settles into holding its tool rather than snapping back into the walk.
+
+Clips are timed and the walk is distance-driven, deliberately: a stride should
+track the ground, and a swing should not speed up because you are sprinting.
+
 ## What is not loaded yet
 
 - **Terrain.** The client generates its heightfield in the browser, because
   collision samples that same field. Loading `SM_Terrain_TestIsland` would put
   two different surfaces in one scene.
-- **Weapons.** Nothing renders a held weapon yet. When that lands,
-  `wantedInSandbox()` in `sandbox.ts` is the one place that changes.
+- **Other weapons.** The pickaxe is held and swung; the five firearms load and
+  have grip sockets, carry poses and textures, but nothing equips them yet
+  because firing is not bound to input.
 
 ## When something does not appear
 

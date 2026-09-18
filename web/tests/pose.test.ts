@@ -9,8 +9,8 @@
 import { describe, expect, it } from "vitest";
 
 import { blueprints, library } from "@/blueprints/library";
-import type { LocomotionBlueprint } from "@/blueprints/types";
-import { cyclePhase, cycleWeight, poseFor } from "@/render/pose";
+import type { LocomotionBlueprint, UpperBodyBlueprint } from "@/blueprints/types";
+import { cyclePhase, cycleWeight, poseFor, sampleUpperBody } from "@/render/pose";
 
 const locomotion = (): LocomotionBlueprint => blueprints().locomotion("locomotion.default");
 
@@ -172,5 +172,140 @@ describe("the shipped locomotion blueprint", () => {
     for (const character of library.characters) {
       expect(() => blueprints().locomotion(character.locomotionId)).not.toThrow();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Upper body
+// ---------------------------------------------------------------------------
+
+const carry = (): UpperBodyBlueprint => blueprints().upperBody("upper.carry");
+const swing = (): UpperBodyBlueprint => blueprints().upperBody("upper.swing");
+
+const walking = {
+  distanceTravelled: 3.1, speed: 5, airborne: false, crouched: false,
+};
+
+describe("upper-body clips", () => {
+  it("holds a static pose regardless of elapsed time", () => {
+    const c = carry();
+    const a = sampleUpperBody(c, 0);
+    const b = sampleUpperBody(c, 99);
+    expect(b["ArmRight"]!.x).toBeCloseTo(a["ArmRight"]!.x, 9);
+    expect(a["ArmRight"]!.x).not.toBeCloseTo(0, 3);
+  });
+
+  it("interpolates between keyframes", () => {
+    // Halfway between two keyframes must be between their two values, not
+    // snapped to either. A clip that snaps reads as a stutter.
+    const s = swing();
+    const first = s.keyframes[0]!.pose.find((t) => t.part === "ArmRight")!.degrees;
+    const second = s.keyframes[1]!.pose.find((t) => t.part === "ArmRight")!.degrees;
+    const midTime = ((s.keyframes[0]!.time + s.keyframes[1]!.time) / 2) * s.durationSeconds;
+
+    const mid = (sampleUpperBody(s, midTime)["ArmRight"]!.x * 180) / Math.PI;
+    const low = Math.min(first, second);
+    const high = Math.max(first, second);
+    expect(mid).toBeGreaterThan(low + 1);
+    expect(mid).toBeLessThan(high - 1);
+  });
+
+  it("holds its last keyframe once a one-shot is over", () => {
+    // So a finished swing rests in the carry pose rather than snapping back
+    // into the walk mid-frame.
+    const s = swing();
+    const end = sampleUpperBody(s, s.durationSeconds);
+    const after = sampleUpperBody(s, s.durationSeconds * 5);
+    expect(after["ArmRight"]!.x).toBeCloseTo(end["ArmRight"]!.x, 9);
+  });
+
+  it("actually moves the arm through the swing", () => {
+    const s = swing();
+    const samples = [0, 0.25, 0.5, 0.75, 1].map(
+      (f) => sampleUpperBody(s, f * s.durationSeconds)["ArmRight"]!.x,
+    );
+    expect(Math.max(...samples) - Math.min(...samples)).toBeGreaterThan(1.0);
+  });
+});
+
+describe("layering", () => {
+  it("gives masked parts to the clip and leaves the rest walking", () => {
+    const pose = poseFor(locomotion(), walking, { blueprint: carry(), elapsed: 0 });
+    // Arms are masked, so they hold the carry pose.
+    const carried = sampleUpperBody(carry(), 0);
+    expect(pose.rotations["ArmRight"]!.x).toBeCloseTo(carried["ArmRight"]!.x, 9);
+    // Legs are not, so they still swing.
+    expect(Math.abs(pose.rotations["LegLeft"]!.x)).toBeGreaterThan(0.05);
+  });
+
+  it("replaces the walk on a masked part rather than adding to it", () => {
+    // The property that matters. Adding the layers would have the arms
+    // swinging while they hold a pickaxe overhead.
+    const withUpper = poseFor(locomotion(), walking, { blueprint: carry(), elapsed: 0 });
+    const laterInStride = poseFor(
+      locomotion(), { ...walking, distanceTravelled: walking.distanceTravelled + 0.9 },
+      { blueprint: carry(), elapsed: 0 },
+    );
+    // The arm is identical at two different points of the walk cycle, which is
+    // only true if the cycle is not contributing to it at all.
+    expect(laterInStride.rotations["ArmRight"]!.x).toBeCloseTo(
+      withUpper.rotations["ArmRight"]!.x, 9,
+    );
+    // ...while an unmasked part did change.
+    expect(laterInStride.rotations["LegLeft"]!.x).not.toBeCloseTo(
+      withUpper.rotations["LegLeft"]!.x, 3,
+    );
+  });
+
+  it("keeps the arms on the clip in mid-air", () => {
+    // Otherwise jumping mid-swing throws the pickaxe behind your head.
+    const airborne = poseFor(
+      locomotion(), { ...walking, airborne: true }, { blueprint: carry(), elapsed: 0 },
+    );
+    const carried = sampleUpperBody(carry(), 0);
+    expect(airborne.rotations["ArmRight"]!.x).toBeCloseTo(carried["ArmRight"]!.x, 9);
+    // The legs still take the airborne tuck.
+    expect(airborne.rotations["LegLeft"]!.x).not.toBeCloseTo(0, 3);
+  });
+
+  it("keeps the crouch off masked parts", () => {
+    const upright = poseFor(locomotion(), walking, { blueprint: carry(), elapsed: 0 });
+    const crouched = poseFor(
+      locomotion(), { ...walking, crouched: true }, { blueprint: carry(), elapsed: 0 },
+    );
+    // Chest is masked by the carry clip, so the crouch must not reach it.
+    expect(crouched.rotations["Chest"]!.x).toBeCloseTo(upright.rotations["Chest"]!.x, 9);
+  });
+
+  it("walks normally with no clip at all", () => {
+    const bare = poseFor(locomotion(), walking);
+    expect(Math.abs(bare.rotations["ArmRight"]!.x)).toBeGreaterThan(0.05);
+  });
+});
+
+describe("the shipped upper-body clips", () => {
+  it("drive only parts inside their own mask", () => {
+    for (const clip of library.upperBody) {
+      for (const frame of clip.keyframes) {
+        for (const track of frame.pose) {
+          expect(clip.mask, `${clip.id} -> ${track.part}`).toContain(track.part);
+        }
+      }
+    }
+  });
+
+  it("gives every weapon a carry and a use pose that resolve", () => {
+    for (const weapon of library.weapons) {
+      expect(() => blueprints().upperBody(weapon.carryPoseId!), weapon.id).not.toThrow();
+      expect(() => blueprints().upperBody(weapon.usePoseId!), weapon.id).not.toThrow();
+    }
+  });
+
+  it("makes the pickaxe swing and the guns not", () => {
+    // A rifle that swings like a pickaxe is the sort of content mix-up the
+    // Blueprint layer is supposed to make obvious.
+    const registry = blueprints();
+    expect(registry.weapon("weapon.pickaxe").usePoseId).toBe("upper.swing");
+    expect(registry.weapon("weapon.assaultRifle").usePoseId).not.toBe("upper.swing");
   });
 });

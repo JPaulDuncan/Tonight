@@ -291,6 +291,51 @@ class TestOrientation:
         assert (0, 0) in occupied, "the bottom-left cell should remain"
         assert len(occupied) == 8, f"expected exactly one hole, got {9 - len(occupied)}"
 
+    def test_weapons_point_the_way_their_holder_faces(self):
+        """The direction a weapon is authored along.
+
+        The docs used to claim the barrel ran along +X *because* that was the
+        character's forward axis. It is not: Blender +X maps to glTF +X, which
+        is the character's right, so a weapon attached to a hand would have
+        pointed out sideways. Weapons are assembled along +X and then turned
+        onto -Y, which is glTF +Z -- the way the character faces.
+        """
+        for name, mesh in weapons.generate_all().items():
+            positions = [to_gltf_position(v) for v in mesh.vertices]
+            depth = max(p[2] for p in positions) - min(p[2] for p in positions)
+            width = max(p[0] for p in positions) - min(p[0] for p in positions)
+            assert depth > width, (
+                f"{name} is {width:.2f} m across and {depth:.2f} m deep; "
+                "its long axis should run along +Z, the forward axis"
+            )
+
+    def test_every_weapon_has_a_grip_socket(self):
+        # Without it the renderer has nothing to line up with the hand.
+        for name, mesh in weapons.generate_all().items():
+            assert "Grip" in mesh.sockets, f"{name} has no Grip socket"
+
+    def test_the_character_offers_the_socket_weapons_ask_for(self):
+        mesh = character.generate_all()["SM_Character_Default"]
+        assert "GripRight" in mesh.sockets
+
+    def test_a_transform_carries_sockets_with_the_geometry(self):
+        """The trap this closes.
+
+        A mesh whose vertices moved but whose sockets did not is a weapon held a
+        hand's width from the hand, and nothing about it looks wrong until you
+        see it in a scene.
+        """
+        mesh = build_pieces.generate_all()["SM_Build_Wall_Wood"].copy()
+        mesh.sockets = {"Probe": (1.0, 0.0, 0.0)}
+        mesh.pivots = {"Probe": (0.0, 1.0, 0.0)}
+
+        moved = mesh.translated((5.0, 0.0, 0.0))
+        assert moved.sockets["Probe"] == pytest.approx((6.0, 0.0, 0.0))
+        assert moved.pivots["Probe"] == pytest.approx((5.0, 1.0, 0.0))
+
+        turned = mesh.rotated_z(90.0)
+        assert turned.sockets["Probe"] == pytest.approx((0.0, 1.0, 0.0), abs=1e-9)
+
     def test_character_faces_positive_gltf_z(self):
         """The direction yaw zero points.
 

@@ -34,6 +34,7 @@ import type {
   RarityBlueprint,
   RecoilProfileBlueprint,
   StormPhaseBlueprint,
+  UpperBodyBlueprint,
   WeaponBlueprint,
 } from "./types";
 
@@ -93,6 +94,7 @@ export class BlueprintRegistry {
   movement(id: string): MovementBlueprint { return this.get<MovementBlueprint>(id); }
   character(id: string): CharacterBlueprint { return this.get<CharacterBlueprint>(id); }
   locomotion(id: string): LocomotionBlueprint { return this.get<LocomotionBlueprint>(id); }
+  upperBody(id: string): UpperBodyBlueprint { return this.get<UpperBodyBlueprint>(id); }
   stormPhase(id: string): StormPhaseBlueprint { return this.get<StormPhaseBlueprint>(id); }
   lighting(id: string): MatchLightingBlueprint { return this.get<MatchLightingBlueprint>(id); }
   matchRules(id: string): MatchRulesBlueprint { return this.get<MatchRulesBlueprint>(id); }
@@ -363,6 +365,64 @@ export function validateLibrary(library: BlueprintLibrary): Finding[] {
       if (Math.min(separation, 1 - separation) < 0.2) {
         warn("The two legs are nearly in phase, which reads as a hop.", l.id);
       }
+    }
+  }
+
+  // --- upper body ---------------------------------------------------------
+  for (const u of library.upperBody) {
+    if (u.mask.length === 0) {
+      error("An upper-body clip with an empty mask animates nothing.", u.id);
+    }
+    if (u.keyframes.length === 0) error("An upper-body clip needs keyframes.", u.id);
+    if (u.durationSeconds < 0) error("durationSeconds cannot be negative.", u.id);
+    if (u.durationSeconds > 0 && u.keyframes.length < 2) {
+      warn("A timed clip with one keyframe is a static pose; set durationSeconds to 0.", u.id);
+    }
+
+    let previous = -Infinity;
+    for (const frame of u.keyframes) {
+      if (frame.time < 0 || frame.time > 1) {
+        error(`Keyframe time ${frame.time} is outside [0, 1].`, u.id);
+      }
+      if (frame.time <= previous) {
+        error(`Keyframes must be ordered by time; ${frame.time} follows ${previous}.`, u.id);
+      }
+      previous = frame.time;
+
+      for (const track of frame.pose) {
+        if (!u.mask.includes(track.part)) {
+          // A track outside the mask is silently ignored at runtime, which is
+          // the worst kind of broken: the data says one thing and nothing
+          // happens.
+          error(`Keyframe drives '${track.part}', which is not in this clip's mask.`, u.id);
+        }
+      }
+    }
+
+    // A looping clip whose ends disagree snaps on the wrap.
+    if (u.loop && u.keyframes.length > 1) {
+      const first = u.keyframes[0]!;
+      const last = u.keyframes[u.keyframes.length - 1]!;
+      if (first.time === 0 && last.time === 1) {
+        const key = (f: typeof first) =>
+          f.pose.map((t) => `${t.part}:${t.axis}:${t.degrees}`).sort().join("|");
+        if (key(first) !== key(last)) {
+          warn("A looping clip's first and last keyframes differ; it will snap.", u.id);
+        }
+      }
+    }
+  }
+
+  // --- weapons hold and use an upper-body clip ----------------------------
+  for (const w of library.weapons) {
+    requireRef(w.carryPoseId, w.id, "carryPoseId");
+    requireRef(w.usePoseId, w.id, "usePoseId");
+
+    // The socket has to be one the character actually offers, or the weapon
+    // ends up parented to nothing and floats at the character's feet.
+    const sockets = new Set(["GripRight", "GripLeft"]);
+    if (w.attachSocket && !sockets.has(w.attachSocket)) {
+      error(`attachSocket '${w.attachSocket}' is not a socket the character has.`, w.id);
     }
   }
 

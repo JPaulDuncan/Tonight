@@ -1,7 +1,7 @@
 {
   "version": 2,
   "assetCount": 35,
-  "textureCount": 9,
+  "textureCount": 10,
   "assets": [
     {
       "name": "SM_Build_Cone_Metal",
@@ -417,11 +417,11 @@
       "vertex_count": 24,
       "triangle_count": 36,
       "size_metres": [
-        0.345,
         0.05,
+        0.345,
         0.64
       ],
-      "content_hash": "00e145079f0e9ea1"
+      "content_hash": "dba951cc883222a6"
     },
     {
       "name": "SM_Weapon_AssaultRifle",
@@ -431,11 +431,11 @@
       "vertex_count": 58,
       "triangle_count": 92,
       "size_metres": [
-        1.04,
         0.06,
+        1.04,
         0.322
       ],
-      "content_hash": "b4c88225b25452b5"
+      "content_hash": "184914e250057dc0"
     },
     {
       "name": "SM_Weapon_Pistol",
@@ -445,11 +445,11 @@
       "vertex_count": 50,
       "triangle_count": 80,
       "size_metres": [
-        0.26,
         0.06,
+        0.26,
         0.227
       ],
-      "content_hash": "4f3186ebfb6fb586"
+      "content_hash": "8a31d354877c7e70"
     },
     {
       "name": "SM_Weapon_Shotgun",
@@ -459,11 +459,11 @@
       "vertex_count": 50,
       "triangle_count": 80,
       "size_metres": [
-        1.12,
         0.06,
+        1.12,
         0.257
       ],
-      "content_hash": "5d434106c7ead909"
+      "content_hash": "b03fb559287a96d4"
     },
     {
       "name": "SM_Weapon_Smg",
@@ -473,11 +473,11 @@
       "vertex_count": 50,
       "triangle_count": 80,
       "size_metres": [
-        0.48,
         0.06,
+        0.48,
         0.362
       ],
-      "content_hash": "5f50ebf09afff4ce"
+      "content_hash": "996ce2061b334e19"
     },
     {
       "name": "SM_Weapon_Sniper",
@@ -487,11 +487,11 @@
       "vertex_count": 68,
       "triangle_count": 112,
       "size_metres": [
-        1.48,
         0.06,
+        1.48,
         0.272
       ],
-      "content_hash": "09167687ad9d579a"
+      "content_hash": "2eeaf18e4d1f0ee1"
     }
   ],
   "textures": [
@@ -566,6 +566,14 @@
       "relative_path": "blender/exports/Textures/T_Terrain_Ground.png",
       "size_pixels": 256,
       "content_hash": "25656d9acf39f8c3"
+    },
+    {
+      "name": "T_Weapon_Metal",
+      "category": "weapon",
+      "file": "Textures/T_Weapon_Metal.png",
+      "relative_path": "blender/exports/Textures/T_Weapon_Metal.png",
+      "size_pixels": 256,
+      "content_hash": "1aad7c03ec5d0f48"
     }
   ]
 }

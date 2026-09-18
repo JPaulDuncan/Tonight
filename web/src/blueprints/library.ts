@@ -39,6 +39,7 @@ export const library: BlueprintLibrary = {
   movement: characterData.movement,
   characters: characterData.characters,
   locomotion: characterData.locomotion,
+  upperBody: characterData.upperBody,
   stormPhases: matchData.stormPhases,
   lighting: matchData.lighting,
   matchRules: matchData.matchRules,

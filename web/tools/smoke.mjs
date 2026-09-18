@@ -111,34 +111,110 @@ await page.waitForTimeout(400);
 // samples the joints while walking. Legs in phase is a hop; arms in phase with
 // their own leg is a shamble. Both are silent failures otherwise.
 await page.keyboard.down("KeyW");
-await page.waitForTimeout(700);
-const mid = await page.evaluate(() => window.__tonight?.describeAvatar?.());
+// Several samples across the stride, not one. Both legs pass through zero twice
+// per cycle, so a single instant can legitimately catch them level and a
+// one-shot check fails at random.
+const strideSamples = [];
+for (let i = 0; i < 6; i++) {
+  await page.waitForTimeout(110);
+  const a = await page.evaluate(() => window.__tonight?.describeAvatar?.());
+  if (a) strideSamples.push(a);
+}
 await page.keyboard.up("KeyW");
 await page.waitForTimeout(200);
 const still = await page.evaluate(() => window.__tonight?.describeAvatar?.());
+
+const mid = strideSamples[strideSamples.length - 1];
 console.log("walking:", JSON.stringify({ speed: mid?.speed, bob: mid?.bobY, joints: mid?.joints }));
 
-if (!mid || !mid.joints.LegLeft) {
+if (strideSamples.length === 0 || !mid?.joints.LegLeft) {
   errors.push("no avatar joints - is the character articulated?");
 } else {
-  const legL = mid.joints.LegLeft[0];
-  const legR = mid.joints.LegRight[0];
-  const armL = mid.joints.ArmLeft[0];
-  if (Math.abs(legL) < 0.02 && Math.abs(legR) < 0.02) {
-    errors.push("the legs did not move while walking");
+  const legLefts = strideSamples.map((a) => a.joints.LegLeft[0]);
+  const spread = Math.max(...legLefts) - Math.min(...legLefts);
+  if (spread < 0.15) {
+    errors.push(`the legs barely moved while walking (range ${spread.toFixed(3)} rad)`);
   }
-  if (Math.sign(legL) === Math.sign(legR) && Math.abs(legL) > 0.05) {
-    errors.push(`legs are in phase (${legL.toFixed(2)}, ${legR.toFixed(2)}) - that is a hop`);
+
+  // Opposition, checked only where the legs are far enough from the crossing
+  // for the signs to mean anything.
+  const swung = strideSamples.find((a) => Math.abs(a.joints.LegLeft[0]) > 0.1);
+  if (!swung) {
+    errors.push("never caught the legs away from the crossing point");
+  } else if (Math.sign(swung.joints.LegLeft[0]) === Math.sign(swung.joints.LegRight[0])) {
+    errors.push("the legs are in phase - that is a hop, not a walk");
   }
-  if (Math.sign(armL) === Math.sign(legL) && Math.abs(armL) > 0.05) {
-    errors.push("the left arm swings with the left leg, not against it");
-  }
-  if (mid.speed < 1) errors.push(`walking speed read as ${mid.speed} m/s`);
-  // Coming to rest must settle, or the character twitches while standing.
+
+  if ((mid.speed ?? 0) < 1) errors.push(`walking speed read as ${mid.speed} m/s`);
   if (still && Math.abs(still.joints.LegLeft[0]) > 0.35) {
     errors.push("the legs did not settle after stopping");
   }
 }
+
+// Back to combat mode: in build mode the left button places a piece rather than
+// swinging, so the swing clip would never start and the failure would look like
+// an animation bug rather than a mode mix-up.
+await page.keyboard.press("KeyQ");
+await page.waitForTimeout(200);
+
+// The upper body layers over the walk, and the held weapon moves with the arm.
+//
+// The rendered frame lags a state read by about one frame at this frame rate,
+// so this asserts on the state rather than on pixels: a screenshot taken at the
+// top of a swing shows the frame before it.
+const swingSamples = [];
+await page.mouse.down();
+for (let i = 0; i < 8; i++) {
+  await page.waitForTimeout(70);
+  const a = await page.evaluate(() => window.__tonight?.describeAvatar?.());
+  if (a) swingSamples.push(a);
+}
+await page.mouse.up();
+await page.waitForTimeout(900);
+const settled = await page.evaluate(() => window.__tonight?.describeAvatar?.());
+
+const held = settled?.weapon;
+console.log("held weapon:", JSON.stringify(held), "resting clip:", settled?.upperBody);
+if (!held) {
+  errors.push("no weapon is held - did the grip sockets survive the export?");
+} else if (held.parts < 2) {
+  errors.push(`the held weapon has ${held.parts} parts; a pickaxe has three`);
+}
+
+if (!swingSamples.some((a) => a.upperBody === "upper.swing")) {
+  errors.push("swinging the pickaxe did not start the swing clip");
+}
+const arms = swingSamples.map((a) => a.joints.ArmRight[0]);
+if (Math.max(...arms) - Math.min(...arms) < 1.0) {
+  errors.push(`the arm barely moved through the swing (range ${(Math.max(...arms) - Math.min(...arms)).toFixed(2)} rad)`);
+}
+// The weapon is parented to the arm, so it has to travel with it.
+const heights = swingSamples.map((a) => a.weapon?.world?.[1] ?? 0);
+if (Math.max(...heights) - Math.min(...heights) < 0.15) {
+  errors.push("the weapon did not move while the arm swung - is it parented to the joint?");
+}
+// And the body must hand back to the carry pose rather than freezing.
+if (settled?.upperBody !== "upper.carry") {
+  errors.push(`after swinging the clip stayed on ${settled?.upperBody}`);
+}
+
+// Carrying must stop the arms swinging with the walk: the carry clip masks
+// them, so an arm that still cycles means the mask is not being applied.
+await page.keyboard.down("KeyW");
+const walkArms = [];
+for (let i = 0; i < 5; i++) {
+  await page.waitForTimeout(90);
+  const a = await page.evaluate(() => window.__tonight?.describeAvatar?.());
+  if (a) walkArms.push({ arm: a.joints.ArmRight[0], leg: a.joints.LegLeft[0] });
+}
+await page.keyboard.up("KeyW");
+await page.waitForTimeout(200);
+
+const armSpread = Math.max(...walkArms.map((w) => w.arm)) - Math.min(...walkArms.map((w) => w.arm));
+const legSpread = Math.max(...walkArms.map((w) => w.leg)) - Math.min(...walkArms.map((w) => w.leg));
+console.log(`carrying while walking: arm spread ${armSpread.toFixed(3)}, leg spread ${legSpread.toFixed(3)}`);
+if (armSpread > 0.05) errors.push(`the carried arm still swings (${armSpread.toFixed(2)} rad)`);
+if (legSpread < 0.2) errors.push("the legs stopped walking while carrying");
 
 // Every material the player can build with has its texture bound. A missing map
 // is a flat-colour wall: easy to miss by eye, trivial to assert.

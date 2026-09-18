@@ -98,6 +98,14 @@ export interface WeaponBlueprint extends ItemBlueprintBase {
   readonly ammoType: AmmoType;
   readonly adsFovMultiplier: number;
   readonly adsTimeSeconds: number;
+  /** Character socket this weapon is held at, e.g. `GripRight`. */
+  readonly attachSocket?: string;
+  /** Upper-body clip while simply holding it. */
+  readonly carryPoseId?: string;
+  /** Upper-body clip played when it is used. */
+  readonly usePoseId?: string;
+  /** Texture asset name per part role, e.g. `{ Barrel: "T_Weapon_Metal" }`. */
+  readonly partTextures?: Readonly<Record<string, string>>;
 }
 
 export interface ConsumableBlueprint extends ItemBlueprintBase {
@@ -261,6 +269,32 @@ export interface LocomotionBlueprint extends BlueprintBase {
   readonly crouched: readonly PoseTrack[];
 }
 
+/** One moment in an upper-body animation. */
+export interface PoseKeyframe {
+  /** Normalised time within the clip, 0..1. */
+  readonly time: number;
+  readonly pose: readonly PoseTrack[];
+}
+
+/**
+ * An upper-body clip, layered over locomotion.
+ *
+ * Masked rather than full-body: the legs keep walking while the arms swing a
+ * pickaxe, which is what lets one locomotion cycle serve every action instead
+ * of needing a walk-and-swing, a run-and-swing and a crouch-and-swing.
+ *
+ * Timed rather than distance-driven, unlike the walk: a swing takes as long as
+ * it takes however fast its owner is moving.
+ */
+export interface UpperBodyBlueprint extends BlueprintBase {
+  /** Parts this clip owns. Everything else stays on the locomotion layer. */
+  readonly mask: readonly string[];
+  /** Seconds for one play. Zero means a static pose that never advances. */
+  readonly durationSeconds: number;
+  readonly loop: boolean;
+  readonly keyframes: readonly PoseKeyframe[];
+}
+
 export interface CharacterBlueprint extends BlueprintBase {
   readonly movementId: string;
   readonly maxHealth: number;
@@ -376,6 +410,7 @@ export interface BlueprintLibrary {
   readonly movement: readonly MovementBlueprint[];
   readonly characters: readonly CharacterBlueprint[];
   readonly locomotion: readonly LocomotionBlueprint[];
+  readonly upperBody: readonly UpperBodyBlueprint[];
   readonly stormPhases: readonly StormPhaseBlueprint[];
   readonly lighting: readonly MatchLightingBlueprint[];
   readonly matchRules: readonly MatchRulesBlueprint[];

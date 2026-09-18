@@ -204,7 +204,26 @@ def build_gltf_document(mesh: MeshData) -> tuple[dict[str, object], bytes]:
         "asset": {"version": "2.0", "generator": GENERATOR},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
-        "nodes": [{"mesh": 0, "name": mesh.name}],
+        "nodes": [
+            {
+                "mesh": 0,
+                "name": mesh.name,
+                # Sockets ride on the node rather than on a primitive: they
+                # belong to the whole asset, not to one piece of its geometry.
+                **(
+                    {
+                        "extras": {
+                            "sockets": {
+                                name: list(to_gltf_position(point))
+                                for name, point in sorted(mesh.sockets.items())
+                            }
+                        }
+                    }
+                    if mesh.sockets
+                    else {}
+                ),
+            }
+        ],
         "meshes": [{"name": mesh.name, "primitives": primitives}],
         "accessors": accessors,
         "bufferViews": buffer_views,

@@ -29,7 +29,7 @@ import {
 } from "@/gameplay/motor";
 import { WorldCollision } from "./collision";
 import { Hud } from "./hud";
-import { ArtLibrary, buildPieceKey, type ArtRecord } from "./assets";
+import { ArtLibrary, buildPieceKey, weaponAssetKey, type ArtRecord } from "./assets";
 import { poseFor } from "./pose";
 import { Heightfield, SANDBOX_TERRAIN, scatterProps, type ScatterPoint } from "./terrain";
 
@@ -45,8 +45,24 @@ const ART_BASE_URL = "art/";
  * lands, this predicate is the one place that changes.
  */
 function wantedInSandbox(record: ArtRecord): boolean {
-  return ["build", "harvest", "character"].includes(record.category);
+  // Terrain is generated in the browser from the heightfield collision reads,
+  // so loading the Blender island would put two surfaces in one scene.
+  return record.category !== "terrain";
 }
+
+/** Part colours for a held weapon, keyed by the generator's part roles. */
+const WEAPON_PART_COLOURS: Readonly<Record<string, number>> = {
+  Haft: 0x6b4a2f,
+  Head: 0x8b9099,
+  Spike: 0x8b9099,
+  Barrel: 0x4a4f57,
+  Receiver: 0x3f444b,
+  Grip: 0x2e3238,
+  Stock: 0x5a4433,
+  Magazine: 0x33373d,
+  Scope: 0x2a2d33,
+  FrontSight: 0x4a4f57,
+};
 
 /**
  * Third-person camera rig.
@@ -119,6 +135,10 @@ export class Sandbox {
   private readonly camera: THREE.PerspectiveCamera;
   private avatar!: THREE.Group;
   private avatarJoints = new Map<string, THREE.Group>();
+  private heldWeapon?: THREE.Group;
+  private readonly heldWeaponId = "weapon.pickaxe";
+  private upperBodyId = "upper.carry";
+  private upperBodyStartedMs = 0;
   private distanceTravelled = 0;
   private lastAvatarSpeed = 0;
   private lastAvatarPosition = vec3();
@@ -243,6 +263,14 @@ export class Sandbox {
           ]),
         ),
         bobY: Number((this.avatar.position.y - this.motor.position.y).toFixed(4)),
+        upperBody: this.upperBodyId,
+        weapon: this.heldWeapon
+          ? {
+              parts: this.heldWeapon.children.length,
+              world: this.heldWeapon.getWorldPosition(new THREE.Vector3()).toArray()
+                .map((v) => Number(v.toFixed(3))),
+            }
+          : null,
         leanX: Number(this.avatar.rotation.x.toFixed(4)),
         speed: Number(this.lastAvatarSpeed.toFixed(3)),
       }),
@@ -390,7 +418,85 @@ export class Sandbox {
       joint.add(mesh);
     }
 
+    this.attachHeldWeapon();
     this.scene.add(this.avatar);
+  }
+
+  /**
+   * Hang the held weapon off the hand.
+   *
+   * Two sockets meet here: the character's `GripRight`, and the weapon's own
+   * `Grip`. Both come from the generators, so the renderer positions the weapon
+   * by subtracting one from the other and never needs to know what a pickaxe
+   * looks like or which way round it is.
+   *
+   * The hand node is a child of the arm's joint, so the weapon inherits the
+   * arm's rotation for free -- a swing moves the pickaxe because the pickaxe is
+   * parented to the thing that swings.
+   */
+  private attachHeldWeapon(): void {
+    const registry = blueprints();
+    const weapon = registry.weapon(this.heldWeaponId);
+    const characterName = this.art.nameForKey("default");
+    const weaponName = this.art.nameForKey(weaponAssetKey(weapon.id));
+    if (!characterName || !weaponName) {
+      throw new Error(`No mesh for held weapon '${this.heldWeaponId}'. Re-run: npm run art`);
+    }
+
+    const socketName = weapon.attachSocket ?? "GripRight";
+    const hand = this.art.socket(characterName, socketName);
+    const grip = this.art.socket(weaponName, "Grip");
+    if (!hand || !grip) {
+      throw new Error(
+        `Missing socket: character '${socketName}' or weapon 'Grip'. Re-run: npm run art`,
+      );
+    }
+
+    // The arm joint the hand hangs from. Without it the weapon would stay put
+    // while the arm that supposedly holds it swings away.
+    const armPart = socketName.endsWith("Left") ? "ArmLeft" : "ArmRight";
+    const joint = this.avatarJoints.get(armPart);
+
+    this.heldWeapon = new THREE.Group();
+    // Positioned in the joint's local space: the hand relative to the shoulder.
+    const pivot = joint ? joint.position : new THREE.Vector3();
+    this.heldWeapon.position.set(hand[0] - pivot.x, hand[1] - pivot.y, hand[2] - pivot.z);
+
+    for (const part of this.art.partsOf(weaponName)) {
+      const mesh = new THREE.Mesh(part.geometry, this.weaponMaterial(weapon.id, part.group));
+      // Offset so the weapon's grip lands on the hand rather than its origin.
+      mesh.position.set(-grip[0], -grip[1], -grip[2]);
+      mesh.castShadow = true;
+      this.heldWeapon.add(mesh);
+    }
+
+    (joint ?? this.avatar).add(this.heldWeapon);
+  }
+
+  private weaponMaterial(weaponId: string, partRole: string): THREE.MeshLambertMaterial {
+    const key = `weapon:${weaponId}:${partRole}`;
+    let material = this.materials.get(key);
+    if (!material) {
+      const textures = blueprints().weapon(weaponId).partTextures ?? {};
+      material = new THREE.MeshLambertMaterial({
+        color: WEAPON_PART_COLOURS[partRole] ?? 0x555a61,
+        map: this.art.texture(textures[partRole]) ?? null,
+      });
+      this.materials.set(key, material);
+    }
+    return material;
+  }
+
+  /**
+   * Start an upper-body clip.
+   *
+   * Restarting one that is already playing is deliberate: swinging twice in
+   * quick succession should replay the swing, not continue a stale one.
+   */
+  private playUpperBody(id: string | undefined): void {
+    if (!id) return;
+    this.upperBodyId = id;
+    this.upperBodyStartedMs = performance.now();
   }
 
   private updateAvatar(deltaSeconds: number): void {
@@ -413,12 +519,27 @@ export class Sandbox {
     const speed = deltaSeconds > 1e-6 ? stepped / deltaSeconds : 0;
     this.lastAvatarSpeed = speed;
 
-    const pose = poseFor(registry.locomotion("locomotion.default"), {
-      distanceTravelled: this.distanceTravelled,
-      speed,
-      airborne: !this.motor.grounded,
-      crouched: this.motor.crouched,
-    });
+    const clip = registry.upperBody(this.upperBodyId);
+    const elapsed = (performance.now() - this.upperBodyStartedMs) / 1000;
+
+    // A one-shot that has run its course hands the body back to the carry pose,
+    // so the character settles into holding its tool rather than freezing on
+    // the last frame of a swing.
+    if (!clip.loop && clip.durationSeconds > 0 && elapsed > clip.durationSeconds) {
+      const carry = registry.weapon(this.heldWeaponId).carryPoseId;
+      if (carry && carry !== this.upperBodyId) this.playUpperBody(carry);
+    }
+
+    const pose = poseFor(
+      registry.locomotion("locomotion.default"),
+      {
+        distanceTravelled: this.distanceTravelled,
+        speed,
+        airborne: !this.motor.grounded,
+        crouched: this.motor.crouched,
+      },
+      { blueprint: registry.upperBody(this.upperBodyId), elapsed },
+    );
 
     for (const [part, joint] of this.avatarJoints) {
       const rotation = pose.rotations[part];
@@ -932,12 +1053,23 @@ export class Sandbox {
       pieceId: this.selectedPieceId, materialId: this.selectedMaterialId,
     }, this.tick, false);
 
-    if (rejection !== PlacementRejection.None) this.say(rejection);
+    if (rejection !== PlacementRejection.None) {
+      this.say(rejection);
+      return;
+    }
+    // Only on a placement that actually happened: an animation that plays on a
+    // rejected input tells the player they built something when they did not.
+    this.playUpperBody("upper.build");
   }
 
   private trySwing(): void {
     if (this.tick - this.lastPickaxeTick < PICKAXE_INTERVAL_TICKS) return;
     this.lastPickaxeTick = this.tick;
+
+    // The swing plays whether or not it connects: a miss is still a swing, and
+    // withholding the animation until a hit lands would make the pickaxe feel
+    // like it fires late.
+    this.playUpperBody(blueprints().weapon(this.heldWeaponId).usePoseId);
 
     const eye = this.eyePosition();
     const aim = this.aimDirection();

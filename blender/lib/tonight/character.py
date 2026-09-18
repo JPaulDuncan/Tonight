@@ -141,6 +141,18 @@ def character(proportions: CharacterProportions = DEFAULT) -> MeshData:
         "Head": (0.0, 0.0, neck),
         "Pelvis": (0.0, 0.0, leg_top),
     }
+
+    # The hand: the bottom of the right arm, nudged forward so a held weapon
+    # sits in front of the fist rather than inside the thigh. A weapon's own
+    # Grip socket is matched to this point, which is what lets any weapon be
+    # held without a per-weapon transform in the renderer.
+    mesh.sockets = {
+        "GripRight": (
+            width / 2.0 + arm_width / 2.0,
+            -depth * 0.55,
+            leg_top + torso_height * 0.10,
+        ),
+    }
     return mesh
 
 
