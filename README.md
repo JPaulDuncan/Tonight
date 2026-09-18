@@ -6,11 +6,20 @@ Context Protocol).
 
 100 players. One shrinking storm. Harvest, build, fight, survive until morning.
 
-> **Status: Pre-production.** This repository currently contains the complete
-> design and technical specification, a runnable Unity project skeleton with the
-> Blueprint data layer and core gameplay systems, and a Blender asset-generation
-> pipeline. It is not yet a playable game. See [docs/03-roadmap.md](docs/03-roadmap.md)
-> for what ships when.
+> **Status: simulation complete, presentation not started.**
+>
+> The gameplay simulation for milestones M1–M5 is written — movement, building,
+> combat, loot, storm, netcode, squads — along with 57 seed Blueprint assets
+> carrying every authored number from the GDD, a procedural art pipeline, and a
+> map that provably satisfies its design constraints.
+>
+> **No C# in this repository has ever been compiled.** It was built without a
+> Unity licence, so the 215 EditMode tests are written but unrun, and no scene,
+> prefab or UI exists. What *is* verified is everything reachable without an
+> engine: 154 Python tests and the Blueprint validator, all green in CI.
+>
+> [docs/03-roadmap.md](docs/03-roadmap.md) marks every exit criterion as done,
+> implemented-but-unverified, or not done, and says what the next task is.
 
 ---
 

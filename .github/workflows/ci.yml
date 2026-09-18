@@ -33,6 +33,32 @@ jobs:
       - name: Tooling tests
         run: python -m pytest tools/tests -q
 
+      - name: Map constraints
+        # GDD section 8's constraints, checked rather than judged by eye. This
+        # is the M5 exit criterion made executable.
+        run: |
+          python - <<'EOF'
+          import sys
+          sys.path.insert(0, "blender/lib")
+          from tonight.terrain import heightfield, max_slope_degrees
+          from tonight.map_layout import (
+              NIGHTFALL_ISLE, NIGHTFALL_TERRAIN, place_pois, summarise, validate_map)
+
+          field = heightfield(NIGHTFALL_TERRAIN)
+          pois = place_pois(NIGHTFALL_ISLE, NIGHTFALL_TERRAIN, field)
+          problems = validate_map(NIGHTFALL_ISLE, NIGHTFALL_TERRAIN, field, pois)
+
+          for key, value in summarise(NIGHTFALL_ISLE, NIGHTFALL_TERRAIN, field, pois).items():
+              print(f"  {key}: {value}")
+          print(f"  maxSlopeDegrees: {max_slope_degrees(NIGHTFALL_TERRAIN, field):.2f}")
+
+          if problems:
+              for problem in problems:
+                  print(f"::error::{problem}")
+              sys.exit(1)
+          print("Nightfall Isle satisfies every GDD section 8 constraint.")
+          EOF
+
       - name: Full generator dry run
         # Exercises every generator and the pre-export checks, and rewrites the
         # manifest, all without bpy.

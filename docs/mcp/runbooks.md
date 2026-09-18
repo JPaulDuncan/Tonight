@@ -165,6 +165,46 @@ than the time it saved.
 
 ---
 
+## RB-07 — Bind art to the seed Blueprints
+
+The first task on a fresh checkout. The 57 seed Blueprints carry every authored
+number from the GDD but no art references: prefabs, meshes, materials and audio
+need Unity and Blender, and the generator that authored them had neither.
+
+**Preconditions**
+- `unity/Tonight/` opens and compiles.
+- `blender --background --python blender/scripts/build_all.py` has run, so
+  `blender/exports/` holds the FBX.
+
+**Steps**
+
+1. Copy `blender/exports/**` into `unity/Tonight/Assets/Tonight/Art/`, keeping
+   the folder split (`Build/`, `Weapons/`, `Harvestables/`, `Terrain/`).
+2. Run `Tonight → Blueprints → Validate All`. The Console now lists every
+   unbound reference. **That list is the checklist.**
+3. Work it in dependency order, because later bindings reference earlier ones:
+   materials → meshes → prefabs → Blueprint slots.
+4. For each `BuildPieceBlueprint`, fill the `MeshByMaterial` entry for **every**
+   build material. The entries already exist with empty mesh slots, so the
+   Console says "assign this mesh" rather than "this piece is missing a
+   material".
+5. Re-run validation until the Console is clean.
+
+**Verification**
+
+```bash
+python3 tools/validate_blueprints.py     # cross-asset checks still pass
+```
+Plus `Tonight → Blueprints → Validate All` reporting zero errors, and the
+EditMode tests still green.
+
+**Do not** hand-edit the generated `.asset` files to add references — CI checks
+them against `tools/seed_blueprints.py` and a hand-edit would be overwritten on
+the next run. Bind through the Inspector, then decide whether the binding
+belongs in the generator.
+
+---
+
 ## Writing a new runbook
 
 Add one whenever a task is done twice. The format:

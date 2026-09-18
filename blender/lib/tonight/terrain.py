@@ -32,6 +32,10 @@ class TerrainSpec:
     #: Largest feature size, in metres.
     feature_size: float
     seed: str = "terrain"
+    #: Metres added before the island falloff, lifting the interior above sea
+    #: level. Without it the noise averages around zero and roughly half the
+    #: island sits underwater.
+    base_height: float = 0.0
 
     @property
     def cell_size(self) -> float:
@@ -123,9 +127,8 @@ def _island_falloff(spec: TerrainSpec, heights: list[list[float]]) -> list[list[
             # fall away rather than forming a circular plateau.
             distance = max(abs(x), abs(y)) / half
             falloff = 1.0 - _smoothstep(SHORE_EDGE, 1.0, distance)
-            heights[row][column] = (
-                heights[row][column] * falloff - (1.0 - falloff) * SHORE_DROP
-            )
+            lifted = heights[row][column] + spec.base_height
+            heights[row][column] = lifted * falloff - (1.0 - falloff) * SHORE_DROP
     return heights
 
 
