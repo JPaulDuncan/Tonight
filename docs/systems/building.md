@@ -195,9 +195,19 @@ Adding a half-wall, a new material, or a new edit shape is asset work.
 Build pieces do **not** replicate as NetworkObjects. The wire record is:
 
 ```
-(cellX:int16, cellY:int16, cellZ:int16, slot:uint8, pieceId:uint8,
- materialId:uint8, hpBucket:uint8)   =  9 bytes
+byte 0-1  cellX       int16
+byte 2-3  cellY       int16
+byte 4-5  cellZ       int16
+byte 6    slot 3 bits | hpBucket 4 bits   (1 bit spare)
+byte 7    pieceId     uint8
+byte 8    materialId  uint8
+                                          = 9 bytes
 ```
+
+Slot has six values and health is quantised to sixteen levels, so the two share
+one byte. Listing them as separate `uint8` fields would come to **ten** bytes,
+and the bandwidth budget in §6 assumes nine — `StructureRecordTests` asserts
+the size so the two cannot drift apart.
 
 Deltas are sent against a per-client acked structure version. Joining and
 reconnecting clients receive a chunked full snapshot. See

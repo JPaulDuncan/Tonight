@@ -81,9 +81,19 @@ Build pieces would be catastrophic as NetworkObjects — thousands of them, neve
 moving, fully described by an integer cell.
 
 ```
-record: (cellX:i16, cellY:i16, cellZ:i16, slot:u8, pieceId:u8,
-         materialId:u8, hpBucket:u8)                    = 9 bytes
+byte 0-1  cellX       int16
+byte 2-3  cellY       int16
+byte 4-5  cellZ       int16
+byte 6    slot 3 bits | hpBucket 4 bits   (1 bit spare)
+byte 7    pieceId     uint8
+byte 8    materialId  uint8
+                                          = 9 bytes
 ```
+
+Slot has six values and health is quantised to sixteen levels, so the two share
+one byte. Listing them as separate `uint8` fields would come to **ten** bytes,
+and the bandwidth budget in §6 assumes nine — `StructureRecordTests` asserts
+the size so the two cannot drift apart.
 
 - The server keeps a monotonically increasing `structureVersion`.
 - Each client acks the version it has.

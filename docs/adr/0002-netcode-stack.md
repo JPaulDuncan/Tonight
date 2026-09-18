@@ -33,7 +33,10 @@ channel for build structures**.
   NetworkObjects with server authority.
 - Build structures do **not**. They replicate through a dedicated channel whose
   wire format is `(cellX, cellY, cellZ, face, pieceId, materialId, hpBucket)` —
-  9 bytes per piece, sent as deltas against a per-client acked structure version.
+  **9 bytes** per piece, sent as deltas against a per-client acked structure
+  version. Slot and the health bucket co-pack into a single byte; the exact
+  layout is in [systems/netcode.md](../systems/netcode.md) §4.2, and
+  `StructureRecordTests` asserts the size so it cannot drift from the budget.
   Clients instantiate plain (non-networked) GameObjects from those records.
 - Interest management is grid-cell based for both channels.
 - Movement uses NGO's client prediction with server reconciliation.
