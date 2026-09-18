@@ -352,6 +352,16 @@ const NO_TARGET: PlacementTarget = { cell: { x: 0, y: 0, z: 0 }, slot: BuildSlot
  */
 export const MAX_OCCUPANCY_STEPS = 2;
 
+/** The point inside a cell's bounds closest to a world position. */
+export function nearestPointInCell(point: Vec3, cell: GridCell): Vec3 {
+  const min = { x: cell.x * CELL_SIZE, y: cell.y * CELL_SIZE, z: cell.z * CELL_SIZE };
+  return {
+    x: Math.min(Math.max(point.x, min.x), min.x + CELL_SIZE),
+    y: Math.min(Math.max(point.y, min.y), min.y + CELL_SIZE),
+    z: Math.min(Math.max(point.z, min.z), min.z + CELL_SIZE),
+  };
+}
+
 /** The slot a piece would occupy, given a view direction. */
 export function slotForPiece(piece: BuildPieceBlueprint, direction: Vec3): BuildSlot {
   switch (piece.placement) {
@@ -418,6 +428,13 @@ export function resolvePlacement(
   const slot = slotForPiece(piece, direction);
 
   for (let step = 0; step <= MAX_OCCUPANCY_STEPS; step++) {
+    // Stepping past an occupied slot must not walk out of build range. Without
+    // this check the resolver hands back a target that validation then rejects,
+    // which is the preview-disagrees-with-placement failure pillar 1 forbids --
+    // and it only shows up on the second piece, once something is in the way.
+    if (distance3(cameraOrigin, nearestPointInCell(cameraOrigin, cell)) > MAX_PLACE_DISTANCE) {
+      return NO_TARGET;
+    }
     if (!structure.isOccupied(cell, slot)) return { cell, slot, found: true };
     cell = stepCell(cell, direction, piece.placement);
   }
@@ -573,11 +590,26 @@ export class BuildWorld implements PlacementWorld {
     return this.wallet(playerId).get(materialId);
   }
 
+  /**
+   * Distance from the player's eye to the NEAREST point of the cell.
+   *
+   * Measuring to the cell centre instead was a real bug: the resolver caps the
+   * aim point at MAX_PLACE_DISTANCE from the eye, but a cell centre can sit
+   * half a cell diagonal further away than the aim point inside it. The ghost
+   * therefore showed a legal position that validation then rejected as out of
+   * range -- exactly the preview-disagrees-with-placement failure pillar 1
+   * forbids.
+   *
+   * Measuring to the nearest point is also the more physical rule: a player
+   * reaches for the piece, not for the cell's centroid. Because the aim point
+   * lies inside the cell, this distance can never exceed the distance the
+   * resolver already capped, so the two agree by construction.
+   */
   distanceFromPlayer(playerId: number, cell: GridCell): number {
     const position = this.playerPositions.get(playerId);
     // Unknown player: report out of range, so a missing registration fails closed.
     if (!position) return Number.MAX_VALUE;
-    return distance3(position, cellCentre(cell));
+    return distance3(position, nearestPointInCell(position, cell));
   }
 
   wouldIntersectLivingPlayer(cell: GridCell, slot: BuildSlot, placingPlayerId: number): boolean {

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { blueprints } from "@/blueprints/library";
-import { BuildSlot, cell, cellCentre } from "@/core/grid";
-import { vec3 } from "@/core/math";
+import { BuildSlot, MAX_PLACE_DISTANCE, cell, cellCentre } from "@/core/grid";
+import { length3, normalise3, vec3 } from "@/core/math";
+import { Rng } from "@/core/rng";
 import { MAX_PLACEMENTS_PER_SECOND, PlacementRejection, type PlaceBuildCommand } from "@/gameplay/commands";
 import {
   BuildStructure,
@@ -12,6 +13,7 @@ import {
   MAX_OCCUPANCY_STEPS,
   MaterialWallet,
   UNSUPPORTED,
+  nearestPointInCell,
   healthAtAge,
   placementTransform,
   resolvePlacement,
@@ -365,14 +367,29 @@ describe("placement resolver", () => {
   });
 
   it("steps forward when the slot is occupied", () => {
+    // Aimed at a surface 4 m away, which is the realistic case: the player is
+    // looking at a wall they just placed, so there is room to step past it.
+    const first = resolvePlacement(vec3(), vec3(0, 0, 1), 4, wall(), structure, 0);
+    structure.tryAdd({
+      cell: first.cell, slot: first.slot, pieceId: "piece.wall", materialId: "material.wood",
+      ownerId: 1, placedTick: 0, damageTaken: 0, editMask: SOLID_MASK,
+    });
+    const second = resolvePlacement(vec3(), vec3(0, 0, 1), 4, wall(), structure, 0);
+    expect(second.found).toBe(true);
+    expect(second.cell).not.toEqual(first.cell);
+  });
+
+  it("refuses to step out of build range", () => {
+    // Aiming into open air puts the target at the range limit already, so there
+    // is nowhere to step to. Returning nothing is correct: the stepped piece
+    // would be out of reach, and handing it back would produce a ghost that
+    // placement rejects.
     const first = resolvePlacement(vec3(), vec3(0, 0, 1), -1, wall(), structure, 0);
     structure.tryAdd({
       cell: first.cell, slot: first.slot, pieceId: "piece.wall", materialId: "material.wood",
       ownerId: 1, placedTick: 0, damageTaken: 0, editMask: SOLID_MASK,
     });
-    const second = resolvePlacement(vec3(), vec3(0, 0, 1), -1, wall(), structure, 0);
-    expect(second.found).toBe(true);
-    expect(second.cell).not.toEqual(first.cell);
+    expect(resolvePlacement(vec3(), vec3(0, 0, 1), -1, wall(), structure, 0).found).toBe(false);
   });
 
   it("gives up after the step limit", () => {
@@ -397,6 +414,58 @@ describe("placement resolver", () => {
       expect(target.cell).toEqual(cell(1, 0, 0));
       expect(target.slot).toBe(BuildSlot.SouthFace);
     }
+  });
+
+  it("never resolves a target that validation rejects as out of range", () => {
+    // Pillar 1: the preview must never disagree with the placed result. The
+    // resolver caps the aim point at MAX_PLACE_DISTANCE from the eye, so every
+    // target it returns must also pass the range check -- which is why that
+    // check measures to the nearest point of the cell rather than its centre.
+    const world = new BuildWorld(blueprints(), TICK_RATE, () => true);
+    world.wallet(PLAYER).add(blueprints().buildMaterial("material.wood"), 500);
+
+    const eye = vec3(2, 6, 2);
+    world.setPlayerPosition(PLAYER, eye);
+
+    // Fill a band of cells so the occupancy walk is exercised too: the
+    // stepping path is where this bug actually appeared, on the second piece.
+    for (let x = -2; x <= 2; x++) {
+      for (let z = -2; z <= 2; z++) {
+        world.structure.tryAdd({
+          cell: cell(x, 1, z), slot: BuildSlot.NorthFace,
+          pieceId: "piece.wall", materialId: "material.wood",
+          ownerId: PLAYER, placedTick: 0, damageTaken: 0, editMask: SOLID_MASK,
+        });
+      }
+    }
+
+    const rng = new Rng(9090);
+    for (let i = 0; i < 400; i++) {
+      const direction = normalise3(vec3(rng.range(-1, 1), rng.range(-1, 1), rng.range(-1, 1)));
+      if (length3(direction) === 0) continue;
+
+      for (const pieceId of ["piece.wall", "piece.floor", "piece.ramp", "piece.cone"]) {
+        const target = resolvePlacement(
+          eye, direction, -1, blueprints().buildPiece(pieceId), world.structure, eye.y - 1.65);
+        if (!target.found) continue;
+
+        expect(
+          world.distanceFromPlayer(PLAYER, target.cell),
+          `${pieceId} toward (${direction.x.toFixed(2)},${direction.y.toFixed(2)},${direction.z.toFixed(2)})`,
+        ).toBeLessThanOrEqual(MAX_PLACE_DISTANCE + 1e-6);
+      }
+    }
+  });
+
+  it("measures range to the nearest point of a cell, not its centre", () => {
+    const world = new BuildWorld(blueprints(), TICK_RATE, () => true);
+    const eye = vec3(0, 0, 0);
+    world.setPlayerPosition(PLAYER, eye);
+
+    // Cell (2,0,0) spans x 8..12. Its nearest point is 8 m away; its centre is
+    // 10.83 m away once the other axes are counted.
+    expect(world.distanceFromPlayer(PLAYER, cell(2, 0, 0))).toBeCloseTo(8, 5);
+    expect(nearestPointInCell(eye, cell(2, 0, 0))).toEqual(vec3(8, 0, 0));
   });
 
   it("resolves nothing for a missing piece", () => {
