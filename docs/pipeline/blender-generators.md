@@ -129,7 +129,7 @@ generator — `.blend` files are not committed
 
 | Symptom | Cause |
 | --- | --- |
-| Asset is rotated 90° in the client | Exported without going through `export_gltf()` |
+| Asset is rotated 90° in the client | An axis assumption in the generator; the export applies one fixed map |
 | Asset is 100× too big | Metres/centimetres mix-up; the pre-export check catches extents over 500 m |
 | Asset floats above the ground | Mesh centred on the origin instead of based at Z = 0 |
 | Asset renders inside-out | Face winding is clockwise from outside |

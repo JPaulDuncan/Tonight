@@ -21,7 +21,7 @@ hardcoded content — and keeps the vocabulary.
 
 ```bash
 cd web && npm install
-npm run verify        # typecheck + 150 tests + production build
+npm run verify        # typecheck + 162 tests + production build
 npm run dev           # the playable sandbox
 
 cd ..
@@ -93,7 +93,7 @@ exists, *variants* of it must not need code.
 | Anything in `web/src/render` | also `npm run smoke` — the browser catches what unit tests cannot |
 | `web/data/*.json` | `npm test` (the validator runs there) |
 | `blender/lib/` | `pytest blender/tests -q` |
-| A generator | the above, plus `build_all.py -- --dry-run`, and commit the manifest |
+| A generator | the above, plus `python3 blender/scripts/build_all.py`, and commit the manifest |
 
 Prefer asserting properties over exact values. "A wall spans exactly one cell"
 survives a refactor; "vertex 7 is at (2, 0.1, 4)" does not, and a test that

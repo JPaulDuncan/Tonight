@@ -30,9 +30,13 @@ number someone typed.
 | glTF / three.js | +Y | −Z | Right |
 
 Both are right-handed, so the export is a single axis change with no handedness
-flip: `export_yup=True`, applied once, in
-`tonight.blender_adapter.export_gltf()`. **Do not call
-`bpy.ops.export_scene.gltf` directly.**
+flip: `(x, y, z) -> (x, z, -y)`, applied once, in `tonight.gltf`. Its determinant
+is +1, so winding is **not** reversed — a mesh that comes out mirrored is a
+generator bug, not an export setting, and
+`test_asset_has_positive_signed_volume` pins that for every shipped asset.
+
+**Do not call `bpy.ops.export_scene.*` directly**
+([ADR-0008](../adr/0008-headless-gltf-export.md)).
 
 (The Unity target this pipeline was built for was Y-up *left*-handed, which made
 this fiddlier. It is easier now, and the rule is unchanged — the setting still
@@ -45,6 +49,12 @@ Two conventions that follow from this, and that generators must respect:
   character's forward axis with no per-asset rotation baked into the mesh.
 - **Props sit with their base at Z = 0.** A prop whose origin is not at its base
   floats or sinks when placed. `test_props_sit_on_the_ground_plane` checks this.
+- **Build pieces are centred in X and Y and based at Z = 0**, spanning their
+  cell. The renderer places them against the cell floor, so a piece centred on
+  its own origin floats half a cell. See [loading-art.md](loading-art.md).
+- **Ramps rise toward −Y**, which is +Z in glTF, because that is the direction
+  the simulation's walkable-surface query rises. Getting this backwards produces
+  a ramp that is walkable from the end it visibly descends to.
 
 ## Naming
 

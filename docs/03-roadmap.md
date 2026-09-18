@@ -120,11 +120,19 @@ Weapons, damage, loot. Still single-player, against dummies.
 - [~] Inventory: slots, stacking and ammo counters are ported from the Unity
       version but not yet re-tested or wired to the sandbox.
 - [ ] Damage numbers and hit markers.
+- [ ] Edit variants render. The doorway and window meshes export and the lookup
+      reaches them; the renderer still draws the solid piece after an edit.
 - [ ] Weapons usable in the sandbox — the firing code has no trigger bound to it
       yet, so combat is tested but not playable.
 - [x] **A new weapon needs one JSON entry and one mesh.**
 
 **Risk retired:** combat feel is achievable with the chosen feedback model.
+
+**Art pipeline closed (ADR-0008).** The client loads the generated `.glb` files;
+the export runs in pure Python, so CI produces the meshes the web job then loads.
+Wiring it up caught two bugs nothing could have caught while the export step
+needed a Blender install: an FBX writer being handed a `.glb` path, and ramps
+authored rising the opposite way to the direction collision walks.
 
 ---
 
@@ -223,7 +231,9 @@ The next tasks, in order:
    the scene. The director works; the renderer ignores it.
 3. Re-port inventory, squads and match flow from the Unity branch. The logic is
    written and was reviewed; it needs translating and re-testing.
-4. Instanced rendering for build pieces, then measure. This is the gate.
+4. Instanced rendering for build pieces, then measure. This is the gate — and
+   now measurable against the real meshes rather than against boxes, which
+   matters because a generated wall is 408 vertices where a box was 24.
 5. Only then the authoritative server.
 
 ## Honest risks
@@ -233,7 +243,7 @@ The next tasks, in order:
 | WebGL at scale | The reason for the rescope. Thousands of build pieces plus 30 players needs instancing and culling that Unity gave us for free. Unmeasured. |
 | No networking yet | The largest unbuilt piece. The simulation is shaped for it — commands, determinism, shared validation — but shaped-for is not built. |
 | Collision is bespoke | Exact for axis-aligned pieces on a known grid, and deliberately limited beyond that. Terrain edge cases will surface. |
-| Art not bound | Meshes generate as glTF; the sandbox still draws procedural three.js primitives. Nothing loads the glTF yet. |
+| Art is bound, but thin | The client loads the generated glTF and the pipeline is covered end to end. What it loads is still stylised blocking geometry with no textures or materials, and no animation exists at all. |
 | Sandbox is not a match | Everything above M2 is tested in isolation, not in a running game. |
 
 ## Not scheduled

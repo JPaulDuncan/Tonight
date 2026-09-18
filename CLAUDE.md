@@ -55,12 +55,13 @@ See `docs/blueprints/README.md` for the full contract.
 ```bash
 cd web && npm install
 npm run dev        # the playable sandbox at localhost:5173
-npm test           # 150 simulation tests, under a second
+npm test           # 162 simulation tests, under a second
+npm run art        # regenerate the meshes the client loads (no Blender needed)
 npm run verify     # typecheck + tests + production build
 npm run smoke      # drive the built game in a real browser and screenshot it
 
 python3 -m pytest blender/tests -q                            # art generator tests
-blender --background --python blender/scripts/build_all.py    # regenerate all art
+python3 blender/scripts/build_all.py                          # regenerate all art
 ```
 
 ## Testing expectations
@@ -75,10 +76,12 @@ blender --background --python blender/scripts/build_all.py    # regenerate all a
 
 ## Things that will bite you
 
-- Blender is Z-up right-handed; three.js is Y-up right-handed. **Export glTF**
-  via `tonight.blender_adapter.export_gltf()`, which is the format three.js loads
-  natively and whose Y-up convention Blender's exporter handles. Do not call
-  `bpy.ops.export_scene.*` directly.
+- Blender is Z-up right-handed; three.js is Y-up right-handed. The one axis map
+  lives in `tonight.gltf`, which writes `.glb` in pure Python — the build path
+  needs no Blender at all (ADR-0008). Do not call `bpy.ops.export_scene.*`.
+- Build pieces are authored **based at the cell floor**, not centred on their
+  origin, and ramps rise toward **−Y** (glTF +Z) because that is the direction
+  collision walks. Both are pinned by tests; see `docs/pipeline/loading-art.md`.
 - Unlike the old Unity target, there is no handedness flip in this pipeline.
   A mesh that looks mirrored is a generator bug, not an export setting.
 - The preview ghost and the placed piece must come from the same transform and

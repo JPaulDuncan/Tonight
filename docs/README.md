@@ -43,6 +43,7 @@ surface, the server-authoritative rules, and the test plan.
 | [pipeline/README.md](pipeline/README.md) | How art gets from a Python generator into the browser. |
 | [pipeline/units-and-naming.md](pipeline/units-and-naming.md) | Metric scale, axis conventions, asset prefixes. |
 | [pipeline/blender-generators.md](pipeline/blender-generators.md) | Writing a new procedural asset generator. |
+| [pipeline/loading-art.md](pipeline/loading-art.md) | How the client finds and loads the generated meshes. |
 
 ## 5. MCP operations
 

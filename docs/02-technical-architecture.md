@@ -10,7 +10,7 @@ Version 0.1 · Owner: engineering
 | Build | Vite | Fast dev server, one production bundle. |
 | Tests | vitest, Node environment | The simulation is headless, so the tests need no DOM. |
 | Content | JSON in `web/data/` | See [ADR-0001](adr/0001-blueprint-data-layer.md). |
-| Art | Blender 4.2+ headless Python, exporting glTF | See [ADR-0004](adr/0004-procedural-art-pipeline.md). |
+| Art | Python generators exporting glTF, no Blender on the build path | See [ADR-0004](adr/0004-procedural-art-pipeline.md) and [ADR-0008](adr/0008-headless-gltf-export.md). |
 | Networking | Not yet built. Authoritative Node server planned. | ADR-0002's stack is superseded; its 9-byte structure channel survives as a design. |
 
 ## 2. The shape of the codebase

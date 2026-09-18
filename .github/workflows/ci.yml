@@ -56,10 +56,11 @@ jobs:
           print("Nightfall Isle satisfies every GDD section 8 constraint.")
           EOF
 
-      - name: Full generator dry run
-        # Exercises every generator and the pre-export checks, and rewrites the
-        # manifest, all without bpy.
-        run: python blender/scripts/build_all.py -- --dry-run
+      - name: Full export
+        # Writes every .glb through tonight.gltf, which needs no Blender
+        # (ADR-0008). This is a real export, not a dry run: the web job loads
+        # what it produces, so a writer bug fails here rather than in a browser.
+        run: python blender/scripts/build_all.py
 
       - name: Manifest is up to date
         # Content hashes in the manifest are how a generator change is reviewed.
@@ -68,7 +69,7 @@ jobs:
         run: |
           if ! git diff --quiet -- blender/exports/manifest.json; then
             echo "::error::blender/exports/manifest.json is out of date."
-            echo "Run: python3 blender/scripts/build_all.py -- --dry-run"
+            echo "Run: python3 blender/scripts/build_all.py --dry-run"
             echo "and commit the result."
             git diff -- blender/exports/manifest.json
             exit 1
@@ -123,7 +124,17 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - run: npm ci
+
+      - name: Generate art
+        # The client loads these; without them the sandbox refuses to boot by
+        # design, because a missing mesh over a live collision grid is an
+        # invisible wall. npm run predev/prebuild do this too.
+        run: npm run art
 
       - name: Typecheck
         run: npm run typecheck

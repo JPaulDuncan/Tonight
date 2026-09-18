@@ -113,14 +113,14 @@ Everything below runs with no GPU, no Blender, and no engine licence.
 
 ```bash
 cd web
-npm run verify       # typecheck + 150 tests + production build
+npm run verify       # typecheck + 162 tests + production build
 npm run smoke        # drive the built game in headless Chromium
 
 cd ..
 python3 -m pip install -r tools/requirements.txt
 python3 -m pytest blender/tests -q                            # 136 art tests
-python3 blender/scripts/build_all.py -- --dry-run             # all 34 meshes
-blender --background --python blender/scripts/build_all.py    # real glTF export
+python3 blender/scripts/build_all.py --dry-run                # all 34 meshes, no files
+python3 blender/scripts/build_all.py                          # real glTF export
 ```
 
 ## Contributing

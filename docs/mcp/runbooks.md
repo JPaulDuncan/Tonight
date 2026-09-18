@@ -29,13 +29,13 @@ in a `.ts` file, the combat system has regressed.
 2. **Generate and check.**
    ```bash
    python3 -m pytest blender/tests -q
-   python3 blender/scripts/build_all.py -- --dry-run --only weapon
+   python3 blender/scripts/build_all.py --dry-run --only weapon
    ```
    The silhouette tests will fail if the new weapon is indistinguishable from an
    existing class by length — that is the test doing its job, not an obstacle.
 3. **Export.**
    ```bash
-   blender --background --python blender/scripts/build_all.py -- --only weapon
+   python3 blender/scripts/build_all.py --only weapon
    ```
 4. **Add the Blueprint.** Append an entry to `weapons` in `web/data/combat.json`.
    Copy the nearest existing weapon and change the fields: `weaponClass`,
@@ -126,9 +126,9 @@ one that matters, and no single entry can perform it.
 
 ```bash
 python3 -m pytest blender/tests -q                              # 1. tests first
-python3 blender/scripts/build_all.py -- --dry-run               # 2. cheap check
+python3 blender/scripts/build_all.py --dry-run                 # 2. cheap check
 git diff blender/exports/manifest.json                          # 3. what changed?
-blender --background --python blender/scripts/build_all.py      # 4. real export
+python3 blender/scripts/build_all.py                           # 4. real export
 ```
 
 Step 3 is the point of the manifest. Content hashes show exactly which assets a
@@ -158,36 +158,38 @@ than the time it saved.
 
 ---
 
-## RB-07 — Bind generated art to the client
+## RB-07 — Add or change a material a piece is built from
 
-Open work, not yet done. The sandbox draws procedural `BoxGeometry` for build
-pieces and terrain; the Blender generators produce the real meshes and a
-manifest describing them, but nothing loads them yet.
+Done, as of [ADR-0008](../adr/0008-headless-gltf-export.md): the client loads the
+generated `.glb` files. This runbook is what replaced it — the end-to-end check
+that the contract still holds.
 
-**Preconditions**
-- `blender --background --python blender/scripts/build_all.py` has run, so
-  `blender/exports/` holds the `.glb` files.
+**Preconditions**: none. No Blender, no bridge.
 
 **Steps**
 
-1. Copy `blender/exports/**` into `web/public/art/`, keeping the folder split
-   (`Build/`, `Weapons/`, `Harvestables/`, `Terrain/`). `export.WEB_ART_ROOT`
-   already names this path.
-2. Load them with three.js's `GLTFLoader`, keyed by the manifest's asset names,
-   and swap them in behind the existing geometry functions in
-   `web/src/render/meshes.ts`.
-3. Keep the collision shapes as they are. Collision reads the *grid*, not the
-   mesh — see [ADR-0006](../adr/0006-build-grid-quantisation.md) — and binding it to
-   art would reintroduce exactly the preview-versus-placement disagreement that
-   pillar 1 forbids.
+1. Add a `buildMaterials` entry in `web/data/building.json`.
+2. Run `cd web && npm test`. It fails, naming every piece that has no mesh for
+   the new material. **That failure is the runbook working**: the alternative is
+   a piece that throws during a build fight in someone else's browser.
+3. Add a `MaterialStyle` for it in `blender/lib/tonight/build_pieces.py`.
+4. `python3 blender/scripts/build_all.py` and commit the manifest.
+5. `npm test` again. Green.
 
 **Verification**
 
-The smoke test (`web/tools/smoke.mjs`) still passes, the pieces still land on
-the same cells, and the screenshot it captures shows the new meshes.
+```bash
+cd web && npm run verify && npm run smoke
+```
 
-**Do not** let the loader fail soft. An asset that silently does not load leaves
-an invisible-but-solid wall, which is the worst failure mode this project has.
+The smoke test reads back each placed piece's vertex count and world bounds, so
+it distinguishes "loaded the generated mesh" from "drew something roughly
+there".
+
+**The real check:** `git diff --stat` shows `.py`, `.json` and
+`blender/exports/manifest.json` — and **no** `.ts`. The renderer resolves
+geometry from the piece's `placement` and the material's `materialKind`, so a
+new material needs no code.
 
 ---
 

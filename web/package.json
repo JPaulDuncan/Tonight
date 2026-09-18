@@ -12,7 +12,10 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "smoke": "vite build && vite preview --port 4180 --strictPort & sleep 5 && node tools/smoke.mjs http://localhost:4180/ /tmp/tonight.png",
-    "verify": "npm run typecheck && npm run test && npm run build"
+    "verify": "npm run typecheck && npm run test && npm run build",
+    "art": "python3 ../blender/scripts/build_all.py --out public/art",
+    "predev": "npm run art",
+    "prebuild": "npm run art"
   },
   "dependencies": {
     "three": "^0.186.0"

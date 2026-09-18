@@ -2,6 +2,9 @@
 
 How art gets from a Python function into the browser.
 
+The second half -- how the client finds and loads what this produces -- is
+[loading-art.md](loading-art.md).
+
 ```
  blender/lib/tonight/          pure Python, no bpy, unit-tested in CI
    └─ generator function ──► MeshData ──► validate()
@@ -37,18 +40,24 @@ and is tested on every push with no Blender install. Only
 outside Blender rather than failing somewhere deeper.
 
 **3. Export goes through `tonight.export`.**
-Never `bpy.ops.export_scene.*` directly. glTF is Y-up right-handed and three.js
-loads it natively, so there is a single axis change and no handedness flip —
-simpler than the old Unity target, but still the kind of setting that looks fine
-in the viewport and surfaces much later as rotated props.
+Never `bpy.ops.export_scene.*` directly — and in fact the build path no longer
+touches Blender at all. `tonight.gltf.write_glb()` serialises `MeshData` to
+binary glTF in pure Python ([ADR-0008](../adr/0008-headless-gltf-export.md)),
+because the generators use no Blender modelling operator and Blender's only
+remaining job was writing the file.
+
+glTF is Y-up right-handed and three.js loads it natively, so there is a single
+axis change and no handedness flip — simpler than the old Unity target, but
+still the kind of setting that looks fine in the viewport and surfaces much
+later as rotated props, so it lives in exactly one function.
 
 ## Running it
 
 ```bash
 python3 -m pytest blender/tests -q                            # 1. tests first
-python3 blender/scripts/build_all.py -- --dry-run             # 2. no Blender needed
+python3 blender/scripts/build_all.py --dry-run                # 2. cheap check
 git diff blender/exports/manifest.json                        # 3. what changed?
-blender --background --python blender/scripts/build_all.py    # 4. real export
+python3 blender/scripts/build_all.py                          # 4. real export
 ```
 
 Step 3 is the point of the manifest, and it is what makes procedural art
@@ -62,7 +71,7 @@ Useful flags:
 
 | Flag | Effect |
 | --- | --- |
-| `--dry-run` | Generate, validate, and write the manifest without touching Blender |
+| `--dry-run` | Generate, validate, and write the manifest without writing meshes |
 | `--only build` | One family. Repeatable: `--only build --only weapon` |
 | `--out <dir>` | Write meshes somewhere other than `blender/exports` |
 

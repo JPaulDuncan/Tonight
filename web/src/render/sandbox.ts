@@ -24,8 +24,29 @@ import {
 } from "@/gameplay/motor";
 import { WorldCollision } from "./collision";
 import { Hud } from "./hud";
-import { coneGeometry, floorGeometry, rampGeometry, rockMesh, treeMesh, wallGeometry } from "./meshes";
+import { ArtLibrary, buildPieceKey, type ArtRecord } from "./assets";
 import { Heightfield, SANDBOX_TERRAIN, scatterProps, type ScatterPoint } from "./terrain";
+
+/** Where `npm run art` publishes the generated meshes. */
+const ART_BASE_URL = "art/";
+
+/**
+ * What the sandbox loads.
+ *
+ * Terrain is generated in the browser from the same heightfield collision reads,
+ * so loading the Blender island would put two different surfaces in one scene.
+ * Weapons are skipped because nothing renders a held weapon yet -- when that
+ * lands, this predicate is the one place that changes.
+ */
+function wantedInSandbox(record: ArtRecord): boolean {
+  return record.category === "build" || record.category === "harvest";
+}
+
+/** Part roles the harvestable generators emit, mapped to their colours. */
+const PROP_PART_COLOURS: Readonly<Record<string, number>> = {
+  Trunk: 0x6b4a2f,
+  Canopy: 0x2f4a33,
+};
 
 const PLAYER_ID = 1;
 const PICKAXE_DAMAGE = 20;
@@ -73,7 +94,22 @@ export class Sandbox {
   private selectedPieceId = "piece.wall";
   private selectedMaterialId = "material.wood";
 
-  constructor(private readonly container: HTMLElement) {
+  /**
+   * Load the art, then build the sandbox.
+   *
+   * Loading is the one part of boot that can fail on a fresh checkout, so it
+   * happens before anything is on screen and its error reaches the caller
+   * intact rather than leaving a half-built world.
+   */
+  static async create(container: HTMLElement): Promise<Sandbox> {
+    const art = await ArtLibrary.load(ART_BASE_URL, wantedInSandbox);
+    return new Sandbox(container, art);
+  }
+
+  private constructor(
+    private readonly container: HTMLElement,
+    private readonly art: ArtLibrary,
+  ) {
     const registry = blueprints();
     const character = registry.get<CharacterBlueprint>("character.default");
 
@@ -115,6 +151,27 @@ export class Sandbox {
 
   start(): void {
     this.renderer.setAnimationLoop(() => this.frame());
+    // A read-only window onto what is actually in the scene. The smoke test
+    // uses it to assert that a placed wall is the *loaded* mesh sitting on the
+    // right cell, which a screenshot cannot distinguish from a procedural box
+    // in roughly the right place.
+    (window as unknown as { __tonight?: unknown }).__tonight = {
+      describePieces: () => this.describePieces(),
+    };
+  }
+
+  /** What each placed piece is and where it ended up, in world metres. */
+  private describePieces(): unknown[] {
+    return [...this.pieceMeshes.entries()].map(([key, mesh]) => {
+      const bounds = new THREE.Box3().setFromObject(mesh);
+      const position = mesh.geometry.getAttribute("position");
+      return {
+        key,
+        vertices: position ? position.count : 0,
+        min: [bounds.min.x, bounds.min.y, bounds.min.z].map((v) => Number(v.toFixed(3))),
+        max: [bounds.max.x, bounds.max.y, bounds.max.z].map((v) => Number(v.toFixed(3))),
+      };
+    });
   }
 
   // -----------------------------------------------------------------------
@@ -175,13 +232,10 @@ export class Sandbox {
   }
 
   private scatter(): void {
-    const bark = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
-    const foliage = new THREE.MeshLambertMaterial({ color: 0x2f4a33 });
-    const stone = new THREE.MeshLambertMaterial({ color: 0x7a7a80 });
     const registry = blueprints();
 
     for (const point of scatterProps(this.field, { tree: 70, rock: 35 })) {
-      const object = point.kind === "tree" ? treeMesh(bark, foliage) : rockMesh(stone);
+      const object = this.propObject(point.kind, point.objectId);
       object.position.set(point.x, point.y, point.z);
       object.rotation.y = point.yaw;
       object.scale.setScalar(point.scale);
@@ -197,7 +251,7 @@ export class Sandbox {
 
   private makeGhost(): void {
     this.ghost = new THREE.Mesh(
-      wallGeometry(),
+      this.geometryFor(this.selectedPieceId, this.selectedMaterialId),
       new THREE.MeshBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.35, depthWrite: false }),
     );
     this.ghost.visible = false;
@@ -214,13 +268,81 @@ export class Sandbox {
     return material;
   }
 
-  private geometryFor(pieceId: string): THREE.BufferGeometry {
-    switch (pieceId) {
-      case "piece.floor": return floorGeometry();
-      case "piece.ramp": return rampGeometry();
-      case "piece.cone": return coneGeometry();
-      default: return wallGeometry();
+  /**
+   * The mesh for a piece, resolved from Blueprint fields.
+   *
+   * `placement` comes from the BuildPieceBlueprint and `materialKind` from the
+   * BuildMaterialBlueprint, so a new piece or a new material is a JSON change
+   * plus a generator -- never a branch here. This used to switch on `pieceId`,
+   * which is the anti-pattern CLAUDE.md names first.
+   */
+  private geometryFor(pieceId: string, materialId: string): THREE.BufferGeometry {
+    const registry = blueprints();
+    const placement = registry.buildPiece(pieceId).placement;
+    const materialKind = registry.buildMaterial(materialId).materialKind;
+
+    const key = buildPieceKey(placement, materialKind);
+    const name = this.art.nameForKey(key);
+    if (!name) {
+      // Loudly, not silently: a missing mesh with live collision is an
+      // invisible wall, and the grid would still stop the player.
+      throw new Error(`No mesh for build piece '${key}'. Re-run: npm run art`);
     }
+    return this.art.geometry(name);
+  }
+
+  /**
+   * Where a loaded mesh's origin goes.
+   *
+   * Every build piece is authored centred in x and z with its base on the cell
+   * floor (`test_pieces_are_authored_with_their_base_at_the_cell_floor`), so the
+   * slot anchor supplies x and z and the cell floor supplies y. Placing one at
+   * the raw anchor would float a wall half a cell high.
+   */
+  private meshOrigin(cell: GridCell, slot: BuildSlot): { x: number; y: number; z: number } {
+    const anchor = slotAnchor(cell, slot);
+    return { x: anchor.x, y: cellCentre(cell).y - CELL_SIZE / 2, z: anchor.z };
+  }
+
+  /**
+   * A harvestable prop, assembled from its loaded variants.
+   *
+   * The generators emit several numbered variants of each prop so a forest is
+   * not one tree repeated; picking by `objectId` keeps that choice deterministic,
+   * which matters because the same seed has to produce the same world on a
+   * server as in a browser.
+   *
+   * Parts keep their own materials: the tree's trunk and canopy arrive as
+   * separate glTF primitives tagged with their role, so the two-tone read
+   * survives the move off procedural geometry.
+   */
+  private propObject(kind: string, objectId: number): THREE.Object3D {
+    const variants = this.art.keysUnder(`${kind}/`);
+    if (variants.length === 0) {
+      throw new Error(`No '${kind}' meshes were loaded. Re-run: npm run art`);
+    }
+    const name = variants[Math.abs(objectId) % variants.length]!;
+
+    const group = new THREE.Group();
+    for (const part of this.art.partsOf(name)) {
+      const mesh = new THREE.Mesh(part.geometry, this.propMaterial(part.group));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
+    return group;
+  }
+
+  private propMaterial(partRole: string): THREE.MeshLambertMaterial {
+    const key = `prop:${partRole}`;
+    let material = this.materials.get(key);
+    if (!material) {
+      material = new THREE.MeshLambertMaterial({
+        color: PROP_PART_COLOURS[partRole] ?? 0x7a7a80,
+      });
+      this.materials.set(key, material);
+    }
+    return material;
   }
 
   private syncPiece(key: string): void {
@@ -230,11 +352,11 @@ export class Sandbox {
 
     this.removePieceMesh(key);
     const mesh = new THREE.Mesh(
-      this.geometryFor(piece.pieceId), this.pieceMaterial(piece.materialId),
+      this.geometryFor(piece.pieceId, piece.materialId), this.pieceMaterial(piece.materialId),
     );
 
-    const anchor = piece.slot === BuildSlot.Interior ? cellCentre(piece.cell) : slotAnchor(piece.cell, piece.slot);
-    mesh.position.set(anchor.x, anchor.y, anchor.z);
+    const origin = this.meshOrigin(piece.cell, piece.slot);
+    mesh.position.set(origin.x, origin.y, origin.z);
     mesh.rotation.y = slotRotationY(piece.slot);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -247,7 +369,10 @@ export class Sandbox {
     const existing = this.pieceMeshes.get(key);
     if (!existing) return;
     this.scene.remove(existing);
-    existing.geometry.dispose();
+    // The geometry is **not** disposed: it belongs to the ArtLibrary and every
+    // other piece of the same kind is drawing it. Disposing here used to be
+    // correct, when each piece built its own procedural geometry; with loaded
+    // meshes it would free the buffers out from under every wall on the map.
     this.pieceMeshes.delete(key);
   }
 
@@ -508,14 +633,16 @@ export class Sandbox {
       return;
     }
 
-    // The ghost must use the same transform function as the placed piece, or it
-    // would disagree with where the piece lands -- the failure pillar 1 forbids.
-    const { position, rotationY } = placementTransform(target);
-    const centre = target.slot === BuildSlot.Interior ? cellCentre(target.cell) : position;
+    // The ghost must use the same geometry and the same transform as the placed
+    // piece, or it would disagree with where the piece lands -- the failure
+    // pillar 1 forbids. Both now go through geometryFor and meshOrigin.
+    const { rotationY } = placementTransform(target);
+    const origin = this.meshOrigin(target.cell, target.slot);
 
-    this.ghost.geometry.dispose();
-    this.ghost.geometry = this.geometryFor(this.selectedPieceId);
-    this.ghost.position.set(centre.x, centre.y, centre.z);
+    // Not disposed: the geometry is the shared, loaded one, and disposing it
+    // here would destroy the mesh every placed piece is drawing.
+    this.ghost.geometry = this.geometryFor(this.selectedPieceId, this.selectedMaterialId);
+    this.ghost.position.set(origin.x, origin.y, origin.z);
     this.ghost.rotation.y = rotationY;
     this.ghost.visible = true;
   }

@@ -29,5 +29,18 @@ if (errors.length > 0) {
       <ul>${errors.map((e) => `<li>${formatFinding(e)}</li>`).join("")}</ul>
     </div>`;
 } else {
-  new Sandbox(container).start();
+  // Art loading is async and is allowed to fail the boot: a missing mesh with a
+  // live collision grid is an invisible wall, so showing why beats starting.
+  Sandbox.create(container).then(
+    (sandbox) => sandbox.start(),
+    (error: unknown) => {
+      console.error(error);
+      container.innerHTML = `
+        <div class="boot-error">
+          <h1>Could not load the art</h1>
+          <p>${error instanceof Error ? error.message : String(error)}</p>
+          <p>Generate it with <code>npm run art</code>, then reload.</p>
+        </div>`;
+    },
+  );
 }

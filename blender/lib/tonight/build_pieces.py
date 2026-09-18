@@ -156,7 +156,9 @@ def ramp(style: MaterialStyle) -> MeshData:
         # Space battens along the slope, skipping the very ends where they
         # would poke through the wedge's triangular caps.
         fraction = (index + 1) / (batten_count + 1)
-        along = -units.CELL_SIZE / 2.0 + units.CELL_SIZE * fraction
+        # The wedge rises toward -Y, so a batten's height grows as it moves that
+        # way. Deriving both from one fraction is what keeps them on the slope.
+        along = units.CELL_SIZE / 2.0 - units.CELL_SIZE * fraction
         height = units.CELL_SIZE * fraction
         parts.append(
             box(

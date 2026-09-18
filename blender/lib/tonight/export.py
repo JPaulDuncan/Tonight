@@ -39,6 +39,10 @@ class ExportRecord:
 
     name: str
     category: str
+    #: Path relative to the export root, e.g. ``Build/SM_Build_Wall_Wood.glb``.
+    #: The web client joins this onto its art base URL, so neither side has to
+    #: reimplement the category-to-folder mapping and drift from the other.
+    file: str
     relative_path: str
     vertex_count: int
     triangle_count: int
@@ -118,6 +122,7 @@ def build_record(mesh: MeshData) -> ExportRecord:
     return ExportRecord(
         name=mesh.name,
         category=category_for(mesh.name),
+        file=export_path(mesh.name, Path(".")).as_posix(),
         relative_path=export_path(mesh.name, EXPORT_ROOT).as_posix(),
         vertex_count=mesh.vertex_count,
         triangle_count=mesh.triangle_count,

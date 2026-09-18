@@ -20,6 +20,18 @@ Vec3 = tuple[float, float, float]
 Vec2 = tuple[float, float]
 
 
+def part_role(part_name: str) -> str:
+    """Strip a generator's instance suffix: ``Panel_0_0`` -> ``Panel``.
+
+    Only trailing all-digit segments are removed, so ``SM_Build_Wall_Wood``
+    survives intact and ``Canopy_3`` and ``Wheel_2`` collapse onto their role.
+    """
+    parts = part_name.split("_")
+    while len(parts) > 1 and parts[-1].isdigit():
+        parts.pop()
+    return "_".join(parts)
+
+
 @dataclass
 class MeshData:
     """Vertices, polygon faces, and per-face-corner UVs.
@@ -33,6 +45,13 @@ class MeshData:
     faces: list[tuple[int, ...]] = field(default_factory=list)
     uvs: list[list[Vec2]] = field(default_factory=list)
     name: str = "Mesh"
+
+    #: Per-face group name, parallel to ``faces``. Populated by :meth:`merge`
+    #: from the name each part carried before it was joined, so a tree exports
+    #: its trunk and its canopy as separate glTF primitives and the client can
+    #: give them different materials. Empty means "one group, the mesh's own
+    #: name", which is the common case for a mesh built directly.
+    face_groups: list[str] = field(default_factory=list)
 
     # ---------------------------------------------------------------- basics
 
@@ -111,6 +130,7 @@ class MeshData:
             faces=list(self.faces),
             uvs=[list(face_uvs) for face_uvs in self.uvs],
             name=self.name,
+            face_groups=list(self.face_groups),
         )
 
     # ----------------------------------------------------------------- merge
@@ -119,9 +139,19 @@ class MeshData:
         """Append ``other``'s geometry, re-indexing its faces."""
         result = self.copy()
         offset = len(result.vertices)
+
+        # Backfill this mesh's own groups before appending, so a mesh that was
+        # built directly and is now being merged into does not silently donate
+        # its faces to the incoming part's group.
+        if not result.face_groups:
+            result.face_groups = [result.name] * len(result.faces)
+
         result.vertices.extend(other.vertices)
         result.faces.extend(tuple(i + offset for i in face) for face in other.faces)
         result.uvs.extend([list(face_uvs) for face_uvs in other.uvs])
+        result.face_groups.extend(
+            other.face_groups if other.face_groups else [other.name] * len(other.faces)
+        )
         return result
 
     @staticmethod
@@ -131,6 +161,32 @@ class MeshData:
             result = result.merge(mesh)
         result.name = name
         return result
+
+    def primitive_groups(self) -> list[tuple[str, list[int]]]:
+        """Face indices grouped by part *role*, in first-appearance order.
+
+        Grouping is by role rather than by exact part name: generators name
+        repeated parts ``Panel_0_0``, ``Canopy_3``, ``Wheel_2``, and one glTF
+        primitive per instance would turn a 17-part wall into 17 draw calls.
+        Stripping the numeric suffix gives a wall two primitives and a tree a
+        trunk and a canopy, which is the distinction that actually carries a
+        material.
+
+        A mesh with no recorded groups is one group named after itself.
+        """
+        if not self.face_groups:
+            return [(self.name, list(range(len(self.faces))))] if self.faces else []
+
+        order: list[str] = []
+        grouped: dict[str, list[int]] = {}
+        for index in range(len(self.faces)):
+            raw = self.face_groups[index] if index < len(self.face_groups) else self.name
+            key = part_role(raw)
+            if key not in grouped:
+                grouped[key] = []
+                order.append(key)
+            grouped[key].append(index)
+        return [(name, grouped[name]) for name in order]
 
     # ------------------------------------------------------------- inspection
 
@@ -263,11 +319,18 @@ def wedge(
     centre: Vec3 = (0.0, 0.0, 0.0),
     name: str = "Wedge",
 ) -> MeshData:
-    """A right-triangular prism rising along +Y, used for ramps.
+    """A right-triangular prism rising along -Y, used for ramps.
 
     The slope is exact rather than approximate: the ramp rises one cell over one
     cell, so the 45 degrees in the GDD is a consequence of the grid rather than
     a number someone typed.
+
+    **The rise direction is load-bearing.** Blender -Y becomes glTF +Z, and the
+    simulation's walkable-surface query rises with +Z
+    (``surfaceHeight`` in ``web/src/render/collision.ts``). A ramp authored the
+    other way looks right in isolation and is walkable from the wrong end, which
+    is precisely the preview-disagrees-with-reality failure vision pillar 1
+    forbids. ``test_ramp_rises_towards_negative_y`` pins it.
     """
     half = (size[0] / 2.0, size[1] / 2.0, size[2] / 2.0)
     cx, cy, cz = centre
@@ -278,18 +341,18 @@ def wedge(
     mesh.add_vertex((cx + half[0], cy - half[1], cz - half[2]))  # 1
     mesh.add_vertex((cx + half[0], cy + half[1], cz - half[2]))  # 2
     mesh.add_vertex((cx - half[0], cy + half[1], cz - half[2]))  # 3
-    # Top edge, at the high end only.
-    mesh.add_vertex((cx - half[0], cy + half[1], cz + half[2]))  # 4
-    mesh.add_vertex((cx + half[0], cy + half[1], cz + half[2]))  # 5
+    # Top edge, above the -Y end: that is the high end.
+    mesh.add_vertex((cx - half[0], cy - half[1], cz + half[2]))  # 4
+    mesh.add_vertex((cx + half[0], cy - half[1], cz + half[2]))  # 5
 
     flat = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
     tri = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)]
 
     mesh.add_face((0, 3, 2, 1), flat)      # bottom
-    mesh.add_face((0, 1, 5, 4), flat)      # the slope
-    mesh.add_face((2, 3, 4, 5), flat)      # back
-    mesh.add_face((0, 4, 3), tri)          # left triangle
-    mesh.add_face((1, 2, 5), tri)          # right triangle
+    mesh.add_face((1, 5, 4, 0), flat)      # vertical back, at -Y
+    mesh.add_face((2, 3, 4, 5), flat)      # the slope, falling away toward +Y
+    mesh.add_face((4, 3, 0), tri)          # left triangle
+    mesh.add_face((2, 5, 1), tri)          # right triangle
 
     return mesh
 

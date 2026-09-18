@@ -1,18 +1,24 @@
 """Regenerate every art asset in Tonight.
 
-Run inside Blender:
+Run it with plain Python:
 
-    blender --background --python blender/scripts/build_all.py
+    python3 blender/scripts/build_all.py
 
-Optional arguments come after ``--``:
+    python3 blender/scripts/build_all.py --dry-run
+    python3 blender/scripts/build_all.py --only build --out web/public/art
 
-    blender --background --python blender/scripts/build_all.py -- --dry-run
+Export goes through :mod:`tonight.gltf`, which writes ``.glb`` without ``bpy``,
+so a full build needs no Blender install (ADR-0008). That is what lets CI
+produce the art the web client loads instead of shipping a client that has
+never been run against a real asset.
+
+It still runs inside Blender, for anyone prototyping there, with arguments
+after ``--``:
+
     blender --background --python blender/scripts/build_all.py -- --only build
 
-``--dry-run`` needs no Blender at all and is what CI uses: it exercises every
-generator, runs the pre-export checks, and writes the manifest, without
-touching ``bpy``. That is deliberate -- it means a generator bug fails CI
-instead of waiting for someone to run Blender locally.
+``--dry-run`` skips writing meshes but still exercises every generator, runs the
+pre-export checks, and rewrites the manifest.
 """
 
 from __future__ import annotations
@@ -21,6 +27,10 @@ import argparse
 import sys
 import time
 from pathlib import Path
+
+
+def _running_inside_blender() -> bool:
+    return "bpy" in sys.modules or Path(sys.argv[0]).name.startswith("blender")
 
 
 def _repo_root() -> Path:
@@ -38,6 +48,7 @@ from tonight.export import (  # noqa: E402
     export_path,
     write_manifest,
 )
+from tonight.gltf import write_glb  # noqa: E402
 from tonight.mesh import MeshData  # noqa: E402
 
 GENERATORS = {
@@ -52,7 +63,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     # Blender passes its own arguments first; everything after "--" is ours.
     # With no "--" separator there is nothing addressed to this script, and
     # Blender's own flags must not be parsed as ours.
-    argv = argv[argv.index("--") + 1 :] if "--" in argv else []
+    # Under Blender, its own flags come first and everything after "--" is
+    # ours. Run directly, there is no separator and argv is already ours.
+    if "--" in argv:
+        argv = argv[argv.index("--") + 1 :]
+    elif _running_inside_blender():
+        # No separator under Blender means nothing was addressed to this
+        # script, and Blender's own flags must not be parsed as ours.
+        argv = []
+    else:
+        argv = argv[1:]
 
     parser = argparse.ArgumentParser(description="Regenerate Tonight's art assets.")
     parser.add_argument(
@@ -115,17 +135,21 @@ def main(argv: list[str]) -> int:
     records = [build_record(mesh) for mesh in meshes.values()]
 
     if not args.dry_run:
-        from tonight.blender_adapter import clear_scene, create_object, export_gltf
-
         for mesh in meshes.values():
-            clear_scene()
-            obj = create_object(mesh)
             destination = export_path(mesh.name, out_root)
-            export_gltf(obj, destination)
-            print(f"[tonight]   exported {destination.name}")
+            write_glb(mesh, destination)
+        print(f"[tonight] Wrote {len(meshes)} .glb files under {out_root}.")
 
+    # The canonical manifest is committed and reviewed; it is how a generator
+    # change is read (ADR-0004).
     manifest_path = root / "blender" / "exports" / "manifest.json"
     write_manifest(records, manifest_path)
+
+    # A copy beside the meshes makes an export directory self-describing, so
+    # the web client fetches its index from the same place as its assets
+    # instead of reaching across the repo for it.
+    if not args.dry_run and out_root.resolve() != manifest_path.parent.resolve():
+        write_manifest(records, out_root / "manifest.json")
 
     total_tris = sum(mesh.triangle_count for mesh in meshes.values())
     elapsed = time.perf_counter() - started
