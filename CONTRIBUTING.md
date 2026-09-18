@@ -21,12 +21,12 @@ hardcoded content — and keeps the vocabulary.
 
 ```bash
 cd web && npm install
-npm run verify        # typecheck + 227 tests + production build
+npm run verify        # typecheck + 248 tests + production build
 npm run dev           # the playable sandbox
 
 cd ..
 python3 -m pip install -r tools/requirements.txt
-python3 -m pytest blender/tests -q                 # 136 art tests
+python3 -m pytest blender/tests -q                 # 304 art tests
 ```
 
 Reading order for a new contributor:

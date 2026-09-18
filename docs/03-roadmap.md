@@ -133,10 +133,10 @@ Weapons, damage, loot. Still single-player, against dummies.
       magazine and cooldown, shots trace against structures and props, and the
       HUD shows the magazine. Bloom, which had shipped inert on every weapon,
       now costs accuracy under sustained fire.
-- [ ] Damage numbers and hit markers. A shot registers and a wall falls, but
-      nothing tells the player how much they did.
-- [ ] Weapons usable in the sandbox — the firing code has no trigger bound to it
-      yet, so combat is tested but not playable.
+- [x] Damage numbers and hit markers. Numbers are pooled and world-anchored at
+      the hit point, coloured per target kind; one shot raises one marker and
+      one number per target, so a shotgun shell reads as a single total rather
+      than ten figures on one pixel.
 - [x] **A new weapon needs one JSON entry and one mesh.**
 
 **Risk retired:** combat feel is achievable with the chosen feedback model.

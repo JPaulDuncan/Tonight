@@ -301,6 +301,95 @@ const remaining = (await page.evaluate(() => window.__tonight?.describePieces?.(
 console.log(`structure fire: built ${builtCount}, remaining ${remaining}, registered a hit: ${hitStructure}`);
 if (!hitStructure) errors.push("firing at a wall registered no structure hit");
 
+// Damage numbers and hit markers (docs/systems/combat.md section 5). The point
+// worth asserting is the aggregation: a shell is ten pellets into one wall and
+// has to read as one number, not ten stacked on the same pixel.
+await page.waitForTimeout(1100);              // let the burst's numbers expire
+const feedbackAtRest = await page.evaluate(() => window.__tonight?.describeFeedback?.());
+console.log("feedback at rest:", JSON.stringify(feedbackAtRest));
+if (!feedbackAtRest) {
+  errors.push("no feedback layer to read");
+} else {
+  // Pooled, per the zero-steady-state-allocation rule: the slots exist before
+  // anything is hit, so a spray neither allocates nor grows.
+  if (feedbackAtRest.pool < 8) {
+    errors.push(`the damage-number pool holds ${feedbackAtRest.pool} - is it allocated up front?`);
+  }
+  if (feedbackAtRest.visible.length) errors.push("damage numbers outlived their lifetime");
+  if (feedbackAtRest.marker) errors.push("the hit marker never cleared");
+}
+
+let shellNumbers = null;
+let shellMarker = null;
+let shellPellets = 0;
+// Retried until at least two pellets land on the wall, because one pellet
+// aggregating to one number proves nothing.
+for (let attempt = 0; attempt < 4 && shellPellets < 2; attempt++) {
+  await ensureBuildMode(true);
+  // Cleared first, so the spread has exactly one thing to hit. Two walls in the
+  // line of fire is two targets and correctly two numbers, which would make the
+  // aggregation check depend on where the earlier phases left their pieces.
+  await page.keyboard.press("Backspace"); await page.waitForTimeout(300);
+  await page.keyboard.press("Digit1"); await page.waitForTimeout(120);
+  await page.mouse.click(640, 360); await page.waitForTimeout(350);
+  await ensureBuildMode(false);
+  await page.keyboard.press("Digit3"); await page.waitForTimeout(700);   // shotgun
+
+  const beforeShot = await weaponState();
+  await page.mouse.down();
+  await page.waitForTimeout(60);
+  await page.mouse.up();
+
+  // Sampled repeatedly rather than once: the marker lives 0.18 s, which is two
+  // frames of software WebGL, so a single read can land either side of it.
+  let seen = [];
+  for (let i = 0; i < 10; i++) {
+    const frame = await page.evaluate(() => window.__tonight?.describeFeedback?.());
+    if (frame?.marker) shellMarker = frame.marker;
+    if (frame && frame.visible.length > seen.length) seen = frame.visible;
+    await page.waitForTimeout(45);
+  }
+  const afterShot = await weaponState();
+  const landed = afterShot.structureHits - beforeShot.structureHits;
+  if (landed > shellPellets) {
+    shellNumbers = seen;
+    shellPellets = landed;
+  }
+  await page.waitForTimeout(1000);            // clear the screen before retrying
+}
+
+if (!shellNumbers) {
+  errors.push("no shell hit a wall, so the feedback went unchecked");
+} else {
+  console.log(
+    `one shell: ${shellPellets} pellets on the wall -> ` +
+      `${JSON.stringify(shellNumbers.map((n) => n.text))}, marker ${shellMarker}`,
+  );
+  // Only the wall's number is counted: the same spread can clip a tree, which
+  // is a second target and correctly a second (green) number.
+  const onWall = shellNumbers.filter((n) => n.cls.includes("dmg-structure"));
+  if (onWall.length !== 1) {
+    errors.push(
+      `${shellPellets} pellets into one wall produced ${onWall.length} numbers, expected 1` +
+        ` (all: ${JSON.stringify(shellNumbers.map((n) => `${n.text} ${n.cls}`))})`,
+    );
+  }
+  if (shellPellets < 2) errors.push("never got two pellets onto the wall to aggregate");
+  const shown = Number(onWall[0]?.text ?? "0");
+  if (!(shown > 0)) errors.push(`the damage number reads "${onWall[0]?.text}"`);
+  if (!shellMarker) errors.push("a hit that damaged a wall showed no hit marker");
+  else if (!shellMarker.includes("marker-chevron")) {
+    errors.push(`a structure hit showed "${shellMarker}", expected the chevron`);
+  }
+}
+
+await page.waitForTimeout(1100);
+const feedbackAfter = await page.evaluate(() => window.__tonight?.describeFeedback?.());
+if (feedbackAfter?.visible.length) {
+  errors.push(`${feedbackAfter.visible.length} damage numbers are still up a second later`);
+}
+if (feedbackAfter?.marker) errors.push("the hit marker is still up a second later");
+
 // Every material the player can build with has its texture bound. A missing map
 // is a flat-colour wall: easy to miss by eye, trivial to assert.
 //

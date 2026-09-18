@@ -13,6 +13,11 @@
         --panel: rgba(18, 16, 28, 0.72);
         --health: #5cc74f;
         --shield: #4aa8f5;
+        /* Feedback colours, from docs/systems/combat.md section 5. */
+        --dmg-player: #ffffff;
+        --dmg-headshot: #ffd24a;
+        --dmg-structure: #5fd8e8;
+        --dmg-harvest: #b8d27a;
       }
 
       * { box-sizing: border-box; }
@@ -47,10 +52,44 @@
 
       .hud-weapon {
         position: absolute; right: 16px; bottom: 96px; text-align: right;
-        font-size: 13px; color: var(--muted); letter-spacing: 0.02em;
+        font-size: 13px; color: var(--dim); letter-spacing: 0.02em;
       }
       .hud-weapon #hud-weapon-name { display: block; color: var(--ink); font-weight: 600; }
       .hud-ammo { font-variant-numeric: tabular-nums; }
+
+      /* Damage numbers and the hit marker. */
+      .hud-feedback { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+      .dmg {
+        position: absolute; left: 0; top: 0;
+        font-weight: 700; font-size: 17px; line-height: 1;
+        letter-spacing: 0.01em; font-variant-numeric: tabular-nums;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+        will-change: transform, opacity;
+      }
+      .dmg-player { color: var(--dmg-player); }
+      .dmg-headshot { color: var(--dmg-headshot); font-size: 21px; }
+      .dmg-structure { color: var(--dmg-structure); }
+      .dmg-harvestable { color: var(--dmg-harvest); }
+
+      .hit-marker {
+        position: absolute; left: 50%; top: 50%;
+        width: 22px; height: 22px; margin: -11px 0 0 -11px;
+      }
+      .hit-marker::before, .hit-marker::after {
+        content: ""; position: absolute; left: 50%; top: 50%;
+        width: 9px; height: 2px; margin: -1px 0 0 -4.5px;
+        background: currentColor; border-radius: 1px;
+      }
+      /* A sharp X for a player: two strokes crossing. */
+      .marker-x { color: var(--dmg-player); }
+      .marker-x::before { transform: rotate(45deg) translateX(5px); }
+      .marker-x::after { transform: rotate(-45deg) translateX(5px); }
+      /* A chevron for a structure: two strokes meeting at a point. */
+      .marker-chevron { color: var(--dmg-structure); }
+      .marker-chevron::before { transform: rotate(45deg) translate(6px, 0); }
+      .marker-chevron::after { transform: rotate(135deg) translate(6px, 0); }
+      .marker-destroyed { filter: brightness(1.6); }
+      .marker-destroyed::before, .marker-destroyed::after { height: 3px; width: 12px; }
 
       .hud-bottom-left {
         position: absolute; left: 50%; bottom: 24px;

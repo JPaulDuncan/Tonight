@@ -1,6 +1,6 @@
 # System: Combat
 
-**Owner:** engineering · **Status:** specified, unimplemented · **Milestone:** M3
+**Owner:** engineering · **Status:** implemented in the sandbox; lag compensation and DBNO still specification only · **Milestone:** M3
 
 ## 1. Health model
 
@@ -143,15 +143,50 @@ that hits a structure **stops** — no penetration in the M3 set.
 Feedback is information, not decoration. A player must know, without looking
 away from the fight:
 
-| Signal | Player hit | Structure hit |
-| --- | --- | --- |
-| Hit marker | Sharp X, white | Chevron, cyan |
-| Sound | Short high tick | Duller thud |
-| Damage number | White; yellow on headshot | Cyan |
-| Elimination | Distinct chime + kill feed | — |
+| Signal | Player hit | Structure hit | Harvestable hit |
+| --- | --- | --- | --- |
+| Hit marker | Sharp X, white | Chevron, cyan | Chevron, cyan |
+| Sound | Short high tick | Duller thud | Duller thud |
+| Damage number | White; yellow on headshot | Cyan | Green |
+| Elimination | Distinct chime + kill feed | Marker strokes thicken and brighten on the hit that destroys the piece | — |
 
 Damage numbers are world-space at the hit point and pooled — no allocation per
 hit, per the zero-steady-state-allocation rule.
+
+### 5.1 How it is built
+
+Everything in the table above is built except the sounds, which are still
+specification only: the sandbox is silent.
+
+The policy lives in `web/src/render/feedback.ts` and is pure arithmetic —
+aggregation, lifetime, rise and fade — so it is tested in Node. The only part
+that touches the browser is `FeedbackLayer`, which the sandbox constructs.
+
+**One shot, one number per target.** A shotgun puts ten pellets into one wall;
+ten numbers on one pixel is noise, and the player wants to know what the *shell*
+did. Pellets accumulate into `ShotAccumulator` during the shot and are flushed
+once, so a shell reads as one total and raises one marker. A spread that
+straddles two pieces correctly gives two numbers — the aggregation is per
+target, not per shot.
+
+A hit that lands for a fraction of a point still shows `1`. Rounding it to `0`
+would read as a miss, which is the opposite of what happened.
+
+**The numbers are DOM, not sprites.** The HUD is already DOM, text stays crisp
+at any distance with no glyph atlas, and the browser composites it. They are
+still world-anchored as specified: each is projected from its hit point every
+frame, so it stays on the thing it describes while the camera moves, and one
+behind the camera is hidden rather than retired — turning back finds it still
+counting down.
+
+**The destroy flag comes from `applyDamage`'s return, not from asking the
+structure afterwards.** By then another pellet of the same shot may have removed
+the piece, or nothing may have, and neither answers "did *this* hit kill it".
+
+The marker lives 0.18 s rather than the 0.12 s that reads best, because at
+0.12 s it can be raised and cleared between two frames of a slow renderer, and a
+hit that confirms itself to nobody is worse than one that lingers. The tracer
+lifetime fell into exactly this trap first.
 
 ## 6. Downed-but-not-out (squad modes)
 
@@ -190,6 +225,10 @@ last living squad member eliminated → all DBNO squadmates eliminated
 | Fire scheduling | Unit | Rate honoured for each mode; burst requires re-press |
 | Lag compensation | Integration (M4) | A hit on a rewound position registers; a 300 ms-late shot compensates only 250 ms |
 | Structure multiplier | Unit | SMG out-damages AR against structures, under-damages against players |
+| Damage as shown | Unit | Rounds to whole numbers; a sub-1 hit shows 1, a miss shows nothing |
+| Shot aggregation | Unit | Ten pellets into one target is one number; separate targets stay separate; overflow past the bucket count keeps the total honest |
+| Number life | Unit | Opaque before it fades, monotonic rise, never transparent early |
+| Feedback in the browser | Smoke | The pool is allocated up front; a shell raises one number and a chevron; both clear on time |
 | DBNO | Integration (M5) | Bleed, revive, last-member wipe |
 | **No-code content test** | Manual, M3 gate | A new weapon added via one Blueprint + one mesh, zero `.ts` diff |
 

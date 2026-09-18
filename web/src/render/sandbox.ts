@@ -34,6 +34,9 @@ import {
 import { WorldCollision } from "./collision";
 import { Hud } from "./hud";
 import { ArtLibrary, buildPieceKey, weaponAssetKey, type ArtRecord } from "./assets";
+import {
+  FeedbackLayer, ShotAccumulator, type HitKind,
+} from "./feedback";
 import { poseFor } from "./pose";
 import { Heightfield, SANDBOX_TERRAIN, scatterProps, type ScatterPoint } from "./terrain";
 
@@ -181,6 +184,11 @@ export class Sandbox {
    */
   private readonly weaponStates = new Map<string, WeaponState>();
   private readonly tracers: { line: THREE.Line; until: number }[] = [];
+  private feedback!: FeedbackLayer;
+  /** Reused every shot, so aggregating pellets allocates nothing. */
+  private readonly shotHits = new ShotAccumulator();
+  /** Reused by `project`, which runs once per live number per frame. */
+  private readonly projectScratch = new THREE.Vector3();
   /** Cumulative, for the smoke test: a live tracer count races its own expiry. */
   private shotsFired = 0;
   private pelletsFired = 0;
@@ -271,6 +279,7 @@ export class Sandbox {
 
     this.buildScene();
     this.hud = new Hud(registry, container);
+    this.feedback = new FeedbackLayer(container);
 
     this.world.onChanged((event) => {
       if (event.kind === "placed" || event.kind === "edited") this.syncPiece(event.key);
@@ -343,6 +352,7 @@ export class Sandbox {
           heldParts: this.heldWeapon?.children.length ?? 0,
         };
       },
+      describeFeedback: () => this.feedback.describe(),
       describeEdit: () => ({
         editing: this.editing ? { ...this.editing } : null,
         target: this.editTarget(),
@@ -994,6 +1004,7 @@ export class Sandbox {
     }
 
     this.expireTracers();
+    this.feedback.update(this, performance.now());
     this.updateAvatar(delta);
     this.updateCamera();
     this.paintEdit();
@@ -1230,10 +1241,36 @@ export class Sandbox {
     // without replicating per-pellet data.
     const shotSeed = this.tick * 2654435761;
 
+    this.shotHits.clear();
     for (let pellet = 0; pellet < Math.max(1, weapon.pelletCount); pellet++) {
       this.pelletsFired++;
       this.fireOnePellet(weapon, pelletDirection(aim, spread, shotSeed, pellet), eye);
     }
+    this.flushShotFeedback();
+  }
+
+  /**
+   * Turn a shot's accumulated hits into numbers and one marker.
+   *
+   * One marker per shot rather than per pellet: the marker confirms that the
+   * shot connected, and flashing it ten times for one shell says nothing extra.
+   */
+  private flushShotFeedback(): void {
+    if (!this.shotHits.anyHits) return;
+
+    const now = performance.now();
+    let markerKind: HitKind = "structure";
+    let destroyed = false;
+
+    for (const hit of this.shotHits.entries()) {
+      this.feedback.showNumber(
+        hit.amount, { x: hit.x, y: hit.y, z: hit.z }, hit.kind, hit.headshot, now,
+      );
+      markerKind = hit.kind;
+      if (hit.destroyed) destroyed = true;
+    }
+
+    this.feedback.showMarker(markerKind, destroyed, now);
   }
 
   private fireOnePellet(
@@ -1253,6 +1290,10 @@ export class Sandbox {
       });
       this.propHits++;
       this.damageProp(prop.prop, damage, false);
+      // Recorded rather than shown: a shotgun's ten pellets are one number.
+      this.shotHits.add(
+        `prop:${prop.prop.point.objectId}`, "harvestable", damage, prop.point,
+      );
       this.spawnTracer(eye, prop.point);
       return;
     }
@@ -1262,7 +1303,13 @@ export class Sandbox {
         profile, targetKind: "structure", distanceMetres: trace.distance,
       });
       this.structureHits++;
-      this.world.applyDamage(trace.cell, trace.slot, damage, this.tick);
+      // applyDamage says whether this hit finished the piece off. Asking the
+      // structure afterwards is not the same question: by then a later pellet
+      // of the same shot may have removed it, or nothing may have yet.
+      const destroyed = this.world.applyDamage(trace.cell, trace.slot, damage, this.tick);
+      this.shotHits.add(
+        pieceKey(trace.cell, trace.slot), "structure", damage, trace.point, false, destroyed,
+      );
     }
     this.spawnTracer(eye, trace.point);
   }
@@ -1362,15 +1409,30 @@ export class Sandbox {
       bestDistance = distance;
     }
 
+    this.shotHits.clear();
+
     if (best) {
       this.swingAtProp(best);
+      this.shotHits.add(
+        `prop:${best.point.objectId}`, "harvestable", PICKAXE_DAMAGE,
+        { x: best.point.x, y: best.point.y + 1.4, z: best.point.z },
+      );
+      this.flushShotFeedback();
       return;
     }
 
     // Nothing to harvest: try the structure the player is looking at.
     const target = this.currentTarget();
     if (target.found && this.world.structure.isOccupied(target.cell, target.slot)) {
-      this.world.applyDamage(target.cell, target.slot, PICKAXE_DAMAGE * 5, this.tick);
+      // The pickaxe ignores the build ramp and always does full damage, so a
+      // player can reliably remove a fresh build (building.md section 4).
+      const damage = PICKAXE_DAMAGE * 5;
+      const destroyed = this.world.applyDamage(target.cell, target.slot, damage, this.tick);
+      this.shotHits.add(
+        pieceKey(target.cell, target.slot), "structure", damage,
+        slotAnchor(target.cell, target.slot), false, destroyed,
+      );
+      this.flushShotFeedback();
     }
   }
 
@@ -1475,6 +1537,24 @@ export class Sandbox {
     this.ghost.position.set(origin.x, origin.y, origin.z);
     this.ghost.rotation.y = rotationY;
     this.ghost.visible = true;
+  }
+
+  /**
+   * World point to viewport pixels.
+   *
+   * Implements ScreenProjector so the feedback layer needs no three.js of its
+   * own. `project` gives normalised device coordinates; anything with w behind
+   * the camera comes back with z above 1, which is the reliable behind-test.
+   */
+  project(x: number, y: number, z: number): { x: number; y: number; visible: boolean } {
+    const point = this.projectScratch.set(x, y, z).project(this.camera);
+    const width = this.renderer.domElement.clientWidth || 1;
+    const height = this.renderer.domElement.clientHeight || 1;
+    return {
+      x: (point.x * 0.5 + 0.5) * width,
+      y: (-point.y * 0.5 + 0.5) * height,
+      visible: point.z < 1,
+    };
   }
 
   /** What the HUD shows about the weapon in hand. */
