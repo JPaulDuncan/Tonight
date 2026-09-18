@@ -38,6 +38,7 @@ export const library: BlueprintLibrary = {
   lootTables: lootData.lootTables,
   movement: characterData.movement,
   characters: characterData.characters,
+  bots: characterData.bots,
   locomotion: characterData.locomotion,
   upperBody: characterData.upperBody,
   stormPhases: matchData.stormPhases,

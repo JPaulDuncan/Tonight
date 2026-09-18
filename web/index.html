@@ -96,12 +96,73 @@
         transform: translateX(-50%); width: 280px;
       }
       .hud-bar {
-        height: 10px; margin-top: 4px; border-radius: 5px;
+        position: relative;
+        height: 14px; margin-top: 4px; border-radius: 5px;
         background: rgba(0, 0, 0, 0.45); overflow: hidden;
       }
       .hud-bar-fill { height: 100%; width: 100%; transition: width 120ms linear; }
       .hud-bar-fill.health { background: var(--health); }
       .hud-bar-fill.shield { background: var(--shield); }
+      /* The number as well as the bar: "can I take another hit" is a decision,
+         and a bar answers it only roughly. */
+      .hud-bar-text {
+        position: absolute; inset: 0; text-align: center;
+        font-size: 11px; font-weight: 700; line-height: 14px;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+      }
+
+      .hud-consumables { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+      .hud-consumable {
+        display: flex; align-items: center; gap: 5px;
+        background: var(--panel); padding: 4px 8px; border-radius: 8px;
+        font-variant-numeric: tabular-nums; font-size: 12px;
+      }
+      .hud-consumable.empty { opacity: 0.35; }
+
+      /* The channel bar. Its whole job is to say how much longer you are a
+         stationary target. */
+      .hud-channel {
+        position: relative; display: none; height: 16px; margin-top: 8px;
+        border-radius: 8px; background: rgba(0, 0, 0, 0.55); overflow: hidden;
+      }
+      .hud-channel-fill { height: 100%; width: 0; background: var(--shield); opacity: 0.55; }
+      .hud-channel-label {
+        position: absolute; inset: 0; text-align: center;
+        font-size: 11px; line-height: 16px; letter-spacing: 0.04em;
+      }
+
+      .hud-feed {
+        position: absolute; right: 16px; top: 96px;
+        display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+      }
+      .hud-feed-line {
+        display: flex; align-items: center; gap: 8px;
+        background: var(--panel); padding: 4px 10px; border-radius: 8px;
+        font-size: 12px;
+      }
+      .hud-feed-name { color: var(--ink); font-weight: 600; }
+      .hud-feed-weapon { color: var(--dim); }
+      .hud-feed-weapon.headshot { color: var(--dmg-headshot); }
+
+      /* Taking a hit. Edges rather than a full tint: the fight is still on and
+         the middle of the screen is where it is happening. */
+      .hud-hurt {
+        position: absolute; inset: 0; opacity: 0;
+        transition: opacity 220ms ease-out;
+        box-shadow: inset 0 0 120px 30px rgba(190, 40, 40, 0.55);
+      }
+
+      .hud-eliminated {
+        position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%);
+        display: none; text-align: center; color: var(--ink);
+        background: rgba(18, 16, 28, 0.82); padding: 18px 32px; border-radius: 10px;
+      }
+      .hud-eliminated-title {
+        font-size: 26px; font-weight: 800; letter-spacing: 0.14em;
+        color: #ff6b6b; margin-bottom: 4px;
+      }
+      .hud-eliminated div:last-child { color: var(--dim); font-variant-numeric: tabular-nums; }
 
       .hud-bottom-right { position: absolute; right: 16px; bottom: 16px; text-align: right; }
 
@@ -165,7 +226,10 @@
         <div><kbd>1</kbd>&hairsp;…&hairsp;<kbd>6</kbd> pick a weapon (out of build mode)</div>
         <div><kbd>R</kbd> reload &middot; left-click to fire or swing</div>
         <div>Hold <kbd>G</kbd> and sweep the crosshair: edit a wall you own</div>
+        <div><kbd>F</kbd><kbd>H</kbd> shield potions &middot; <kbd>J</kbd><kbd>K</kbd> bandage / med kit</div>
         <div><kbd>T</kbd> revert an edit &middot; <kbd>Backspace</kbd> reset the world</div>
+        <p>Red figures are bots. The two ahead never shoot back; the others
+        return fire inside 22 m &mdash; build a wall when they do.</p>
         <p>Click the view to capture the mouse. Esc releases it.</p>
       </div>
     </div>

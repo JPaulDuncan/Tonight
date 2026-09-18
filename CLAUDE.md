@@ -55,7 +55,7 @@ See `docs/blueprints/README.md` for the full contract.
 ```bash
 cd web && npm install
 npm run dev        # the playable sandbox at localhost:5173
-npm test           # 248 simulation tests, under two seconds
+npm test           # 288 simulation tests, under two seconds
 npm run art        # regenerate the meshes the client loads (no Blender needed)
 npm run verify     # typecheck + tests + production build
 npm run smoke      # drive the built game in a real browser and screenshot it
@@ -87,6 +87,11 @@ python3 blender/scripts/build_all.py                          # regenerate all a
 - The preview ghost and the placed piece must come from the same transform and
   the same range check. Two bugs have already come from letting them diverge;
   vision pillar 1 forbids it outright.
+- A shot trace is expensive: every 12 cm step asks the structure grid about 45
+  cells by 4 slots. One shooter is fine; five bots asking whether they can see
+  you, thirty times a second, halved the frame rate. Line of sight is now asked
+  last and only when a bot would otherwise fire, and `piecesNear` returns
+  immediately when nothing is built.
 - The Blender MCP server talks to a *running* Blender instance with the addon
   connected. Tool calls fail unhelpfully if it is not — see
   `docs/mcp/troubleshooting.md`. The art pipeline also runs fully headless.

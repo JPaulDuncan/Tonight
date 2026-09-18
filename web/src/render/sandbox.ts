@@ -11,7 +11,9 @@ import * as THREE from "three";
 
 import { blueprints } from "@/blueprints/library";
 import { SOLID_MASK } from "@/blueprints/registry";
-import type { BuildMaterialBlueprint, CharacterBlueprint } from "@/blueprints/types";
+import type {
+  BotBlueprint, BuildMaterialBlueprint, CharacterBlueprint, ConsumableBlueprint,
+} from "@/blueprints/types";
 import {
   BuildSlot, CELL_SIZE, cellCentre, cellToWorld, parsePieceKey, pieceKey, slotAnchor,
   slotRotationY,
@@ -23,10 +25,19 @@ import {
   BuildWorld, resolveEditTarget, resolvePlacement, placementTransform, variantForMask,
 } from "@/gameplay/build";
 import {
-  FireRejection, beginEquip, computeDamage, effectiveSpread, freshWeaponState,
-  fullHealth, pelletDirection, tickWeapon, tryBeginReload, tryFire,
-  type HealthPool, type WeaponState,
+  FireRejection, applyHit, beginEquip, computeDamage, effectiveSpread, freshWeaponState,
+  pelletDirection, tickWeapon, tryBeginReload, tryFire,
+  type WeaponState,
 } from "@/gameplay/combat";
+import {
+  EliminationFeed, damageCombatant, damageHealthDirectly, makeCombatant, readyToRespawn,
+  respawnCombatant, type Combatant,
+} from "@/gameplay/combatant";
+import {
+  beginUse, cancelUse, channelFraction, completeUse, freshChannel, interruptOnDamage,
+  type ChannelState,
+} from "@/gameplay/consumable";
+import { decideBot, freshBotState, provoke, resetBotState, type BotState } from "@/gameplay/bot";
 import { harvestHit, harvestStateFor, weakPointFor, type HarvestState } from "@/gameplay/harvest";
 import {
   TICK_DELTA, TICK_RATE, motorAtRest, stepMotor, yawRotate, type MotorState,
@@ -37,6 +48,7 @@ import { ArtLibrary, buildPieceKey, weaponAssetKey, type ArtRecord } from "./ass
 import {
   FeedbackLayer, ShotAccumulator, type HitKind,
 } from "./feedback";
+import { Avatar, type HitboxHit } from "./avatar";
 import { poseFor } from "./pose";
 import { Heightfield, SANDBOX_TERRAIN, scatterProps, type ScatterPoint } from "./terrain";
 
@@ -108,22 +120,6 @@ const PROP_PART_COLOURS: Readonly<Record<string, number>> = {
   Canopy: 0x2f4a33,
 };
 
-/**
- * Character part colours, keyed by the hitbox each part stands for.
- *
- * The generator names its parts after `CharacterBlueprint.hitboxes`, so these
- * line up without a second list of what a limb is.
- */
-const CHARACTER_PART_COLOURS: Readonly<Record<string, number>> = {
-  Head: 0xd8b28a,
-  Chest: 0x4a6fa5,
-  Pelvis: 0x3b5580,
-  ArmLeft: 0xd8b28a,
-  ArmRight: 0xd8b28a,
-  LegLeft: 0x35507a,
-  LegRight: 0x35507a,
-};
-
 const PLAYER_ID = 1;
 const PICKAXE_DAMAGE = 20;
 const PICKAXE_INTERVAL_TICKS = Math.ceil((60 / 84) * TICK_RATE);
@@ -144,6 +140,44 @@ const SANDBOX_LOADOUT = [
 /** How far a hitscan shot reaches before it stops caring. */
 const SHOT_RANGE = 220;
 
+/**
+ * The consumables the sandbox hands you, and the keys that use them.
+ *
+ * A full stack of each, for the same reason the wallet starts at 500 wood:
+ * this is a range for testing how a shield potion feels mid-fight, not the
+ * economy. Which items exist is Blueprint data; only the key bindings are here.
+ */
+const SANDBOX_CONSUMABLES = [
+  { key: "KeyF", label: "F", itemId: "consumable.miniShield" },
+  { key: "KeyH", label: "H", itemId: "consumable.bigShield" },
+  { key: "KeyJ", label: "J", itemId: "consumable.bandage" },
+  { key: "KeyK", label: "K", itemId: "consumable.medkit" },
+] as const;
+
+/** Which bot stands where, in metres from the spawn point. */
+const BOT_SPAWNS = [
+  // Targets ahead, inside the range but outside nobody's patience. The
+  // skirmishers sit beyond their own 22 m engage range, so the spawn point is
+  // safe and walking toward one is a decision rather than an ambush.
+  { botId: "bot.target", x: -8, z: 17 },
+  { botId: "bot.target", x: 9, z: 18 },
+  { botId: "bot.skirmisher", x: 30, z: 8 },
+  { botId: "bot.skirmisher", x: -28, z: -12 },
+  { botId: "bot.skirmisher", x: 5, z: -32 },
+] as const;
+
+/** Bots read as not-you at a glance. Nothing gameplay hangs off the colour. */
+const BOT_TINT = 0xb2564f;
+
+/** Seconds the player spends eliminated before standing back up. */
+const PLAYER_RESPAWN_SECONDS = 4;
+
+/** How long an entry stays in the kill feed. */
+const FEED_SECONDS = 8;
+
+/** How long the screen flashes after taking a hit. */
+const DAMAGE_FLASH_SECONDS = 0.35;
+
 /** Reserve ammo. Unlimited in the sandbox; the real number comes from inventory. */
 const SANDBOX_RESERVE_AMMO = 999;
 
@@ -160,6 +194,27 @@ const TRACER_SECONDS = 0.09;
 /** Tracers alive at once. A spray at 800 rpm would otherwise pile them up. */
 const MAX_TRACERS = 24;
 
+/**
+ * One bot in the world.
+ *
+ * The Blueprint is its difficulty, the combatant is its life, the state is what
+ * it has noticed, and the weapon state is a real magazine -- a bot reloads
+ * through `tryBeginReload` like anybody else, because a second firing state
+ * machine would drift from the first within a week.
+ */
+interface BotInstance {
+  readonly blueprint: BotBlueprint;
+  readonly combatant: Combatant;
+  readonly brain: BotState;
+  readonly avatar: Avatar;
+  readonly spawn: Vec3;
+  readonly weapon: WeaponState;
+  yaw: number;
+  shotsFired: number;
+  /** Whether it could see the player on the last tick, for the smoke test. */
+  sawTarget: boolean;
+}
+
 interface PropInstance {
   readonly point: ScatterPoint;
   readonly object: THREE.Object3D;
@@ -171,9 +226,7 @@ export class Sandbox {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
-  private avatar!: THREE.Group;
-  private avatarJoints = new Map<string, THREE.Group>();
-  private heldWeapon: THREE.Group | undefined;
+  private avatar!: Avatar;
   private heldWeaponId = "weapon.pickaxe";
   /**
    * Per-weapon state, kept across swaps.
@@ -194,6 +247,7 @@ export class Sandbox {
   private pelletsFired = 0;
   private structureHits = 0;
   private propHits = 0;
+  private botHits = 0;
   private upperBodyId = "upper.carry";
   private upperBodyStartedMs = 0;
   private distanceTravelled = 0;
@@ -213,7 +267,18 @@ export class Sandbox {
   private ghost!: THREE.Mesh;
 
   private motor: MotorState;
-  private pool: HealthPool;
+  /** The player, as the same kind of thing every bot is. */
+  private player!: Combatant;
+  private readonly bots: BotInstance[] = [];
+  private readonly feed = new EliminationFeed();
+  private readonly channel: ChannelState = freshChannel();
+  private readonly stock = new Map<string, number>();
+  private spawnPoint = vec3();
+  private damageFlashUntilMs = 0;
+  /** Cumulative, for the smoke test. */
+  private damageTaken = 0;
+  private shieldAbsorbed = 0;
+  private botShotsFired = 0;
   private tick = 0;
   private accumulator = 0;
   private lastPickaxeTick = -999;
@@ -273,9 +338,15 @@ export class Sandbox {
       this.world.wallet(PLAYER_ID).add(registry.get<BuildMaterialBlueprint>(id), 500);
     }
 
-    this.pool = fullHealth(character.maxHealth, character.maxShield);
-    const spawn = vec3(0, this.field.sample(0, 0) + 1, 0);
-    this.motor = motorAtRest(spawn);
+    this.player = makeCombatant(PLAYER_ID, "You", character);
+    this.spawnPoint = vec3(0, this.field.sample(0, 0) + 1, 0);
+    this.motor = motorAtRest(this.spawnPoint);
+
+    // A full stack of each consumable, so shields can be tested without first
+    // testing the loot roller.
+    for (const { itemId } of SANDBOX_CONSUMABLES) {
+      this.stock.set(itemId, registry.get<ConsumableBlueprint>(itemId).maxStack);
+    }
 
     this.buildScene();
     this.hud = new Hud(registry, container);
@@ -312,24 +383,24 @@ export class Sandbox {
       describeAvatar: () => ({
         distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
         grounded: this.motor.grounded,
+        position: [this.motor.position.x, this.motor.position.y, this.motor.position.z]
+          .map((v: number) => Number(v.toFixed(3))),
+        yaw: Number(this.motor.yaw.toFixed(2)),
+        pitch: Number(this.motor.pitch.toFixed(2)),
         joints: Object.fromEntries(
-          [...this.avatarJoints].map(([part, joint]) => [
+          [...this.avatar.joints].map(([part, joint]) => [
             part,
             [joint.rotation.x, joint.rotation.y, joint.rotation.z].map(
-              (v) => Number(v.toFixed(4)),
+              (v: number) => Number(v.toFixed(4)),
             ),
           ]),
         ),
-        bobY: Number((this.avatar.position.y - this.motor.position.y).toFixed(4)),
+        bobY: Number((this.avatar.root.position.y - this.motor.position.y).toFixed(4)),
         upperBody: this.upperBodyId,
-        weapon: this.heldWeapon
-          ? {
-              parts: this.heldWeapon.children.length,
-              world: this.heldWeapon.getWorldPosition(new THREE.Vector3()).toArray()
-                .map((v) => Number(v.toFixed(3))),
-            }
+        weapon: this.avatar.heldParts > 0
+          ? { parts: this.avatar.heldParts, world: this.avatar.heldPosition() }
           : null,
-        leanX: Number(this.avatar.rotation.x.toFixed(4)),
+        leanX: Number(this.avatar.root.rotation.x.toFixed(4)),
         speed: Number(this.lastAvatarSpeed.toFixed(3)),
       }),
       describeWeapon: () => {
@@ -349,10 +420,50 @@ export class Sandbox {
           pelletsFired: this.pelletsFired,
           structureHits: this.structureHits,
           propHits: this.propHits,
-          heldParts: this.heldWeapon?.children.length ?? 0,
+          heldParts: this.avatar.heldParts,
         };
       },
       describeFeedback: () => this.feedback.describe(),
+      describeSurvival: () => ({
+        player: {
+          health: Number(this.player.pool.health.toFixed(2)),
+          shield: Number(this.player.pool.shield.toFixed(2)),
+          alive: this.player.alive,
+          eliminations: this.player.eliminations,
+          damageTaken: Number(this.damageTaken.toFixed(2)),
+          shieldAbsorbed: Number(this.shieldAbsorbed.toFixed(2)),
+        },
+        channel: {
+          active: this.channel.active,
+          itemId: this.channel.itemId,
+          fraction: Number(channelFraction(this.channel, this.tick).toFixed(3)),
+        },
+        stock: Object.fromEntries(this.stock),
+        botShotsFired: this.botShotsFired,
+        botHits: this.botHits,
+        bots: this.bots.map((bot) => ({
+          id: bot.blueprint.id,
+          health: Number(bot.combatant.pool.health.toFixed(2)),
+          shield: Number(bot.combatant.pool.shield.toFixed(2)),
+          alive: bot.combatant.alive,
+          provoked: bot.brain.provoked,
+          sees: bot.sawTarget,
+          shotsFired: bot.shotsFired,
+          respawnIn: bot.combatant.alive
+            ? 0
+            : Number(((bot.combatant.respawnAtTick - this.tick) / TICK_RATE).toFixed(2)),
+          position: [bot.spawn.x, bot.spawn.y, bot.spawn.z].map((v) => Number(v.toFixed(2))),
+          distance: Number(Math.hypot(
+            bot.spawn.x - this.motor.position.x, bot.spawn.z - this.motor.position.z,
+          ).toFixed(2)),
+        })),
+        feed: [...this.feed.visible(this.tick, FEED_SECONDS * TICK_RATE)].map((entry) => ({
+          attacker: entry.attackerName,
+          victim: entry.victimName,
+          weapon: entry.weaponName,
+          headshot: entry.headshot,
+        })),
+      }),
       describeEdit: () => ({
         editing: this.editing ? { ...this.editing } : null,
         target: this.editTarget(),
@@ -409,6 +520,7 @@ export class Sandbox {
     this.scene.add(this.terrainMesh());
     this.scatter();
     this.makeAvatar();
+    this.spawnBots();
     this.makeEditOverlay();
     this.makeGhost();
   }
@@ -460,96 +572,54 @@ export class Sandbox {
    * camera is a view onto the simulation, not the other way round.
    */
   private makeAvatar(): void {
-    const name = this.art.nameForKey("default");
-    if (!name) throw new Error("No character mesh was loaded. Re-run: npm run art");
-
-    const character = blueprints().character("character.default");
-    const partTextures = character.partTextures ?? {};
-
-    this.avatar = new THREE.Group();
-    this.avatarJoints = new Map();
-
-    for (const part of this.art.partsOf(name)) {
-      const material = new THREE.MeshLambertMaterial({
-        color: CHARACTER_PART_COLOURS[part.group] ?? 0x8899aa,
-        map: this.art.texture(partTextures[part.group]) ?? null,
-      });
-      const mesh = new THREE.Mesh(part.geometry, material);
-      mesh.castShadow = true;
-
-      // A limb has to turn about its joint, not about the character's feet.
-      // The generator emits the joint (it knows where a hip is); the renderer
-      // just puts a node there and hangs the geometry off it, offset back by
-      // the same amount so the part does not move until it is rotated.
-      const pivot = part.pivot;
-      if (!pivot) {
-        this.avatar.add(mesh);
-        continue;
-      }
-
-      const joint = this.avatarJoints.get(part.group) ?? new THREE.Group();
-      if (!this.avatarJoints.has(part.group)) {
-        joint.position.set(pivot[0], pivot[1], pivot[2]);
-        this.avatarJoints.set(part.group, joint);
-        this.avatar.add(joint);
-      }
-      mesh.position.set(-pivot[0], -pivot[1], -pivot[2]);
-      joint.add(mesh);
-    }
-
-    this.attachHeldWeapon();
-    this.scene.add(this.avatar);
+    this.avatar = new Avatar(this.art, blueprints().character("character.default"));
+    this.avatar.equip(
+      blueprints().weapon(this.heldWeaponId),
+      (weaponId, part) => this.weaponMaterial(weaponId, part),
+    );
+    this.scene.add(this.avatar.root);
   }
 
   /**
-   * Hang the held weapon off the hand.
+   * Put the bots in the world.
    *
-   * Two sockets meet here: the character's `GripRight`, and the weapon's own
-   * `Grip`. Both come from the generators, so the renderer positions the weapon
-   * by subtracting one from the other and never needs to know what a pickaxe
-   * looks like or which way round it is.
-   *
-   * The hand node is a child of the arm's joint, so the weapon inherits the
-   * arm's rotation for free -- a swing moves the pickaxe because the pickaxe is
-   * parented to the thing that swings.
+   * Placed relative to the spawn rather than scattered: the point of a range is
+   * knowing where the targets are. The two furthest out are skirmishers, so
+   * walking in any direction eventually finds a fight, and the pair in front
+   * are pure targets that never shoot back -- which is a Blueprint field, not a
+   * second kind of bot.
    */
-  private attachHeldWeapon(): void {
+  private spawnBots(): void {
     const registry = blueprints();
-    const weapon = registry.weapon(this.heldWeaponId);
-    const characterName = this.art.nameForKey("default");
-    const weaponName = this.art.nameForKey(weaponAssetKey(weapon.id));
-    if (!characterName || !weaponName) {
-      throw new Error(`No mesh for held weapon '${this.heldWeaponId}'. Re-run: npm run art`);
+    for (const [index, placement] of BOT_SPAWNS.entries()) {
+      const blueprint = registry.bot(placement.botId);
+      const character = registry.character(blueprint.characterId);
+      const weapon = registry.weapon(blueprint.weaponId);
+
+      const x = this.spawnPoint.x + placement.x;
+      const z = this.spawnPoint.z + placement.z;
+      const spawn = vec3(x, this.field.sample(x, z), z);
+
+      const avatar = new Avatar(this.art, character, BOT_TINT, false);
+      avatar.equip(weapon, (weaponId, part) => this.weaponMaterial(weaponId, part));
+      this.scene.add(avatar.root);
+
+      this.bots.push({
+        blueprint,
+        combatant: makeCombatant(
+          100 + index, blueprint.displayName, character, blueprint.startingShield,
+        ),
+        brain: freshBotState(),
+        avatar,
+        spawn,
+        weapon: freshWeaponState(weapon),
+        // Facing the spawn point, so they are looking at the player rather than
+        // away from one another.
+        yaw: (Math.atan2(this.spawnPoint.x - x, this.spawnPoint.z - z) * 180) / Math.PI,
+        shotsFired: 0,
+        sawTarget: false,
+      });
     }
-
-    const socketName = weapon.attachSocket ?? "GripRight";
-    const hand = this.art.socket(characterName, socketName);
-    const grip = this.art.socket(weaponName, "Grip");
-    if (!hand || !grip) {
-      throw new Error(
-        `Missing socket: character '${socketName}' or weapon 'Grip'. Re-run: npm run art`,
-      );
-    }
-
-    // The arm joint the hand hangs from. Without it the weapon would stay put
-    // while the arm that supposedly holds it swings away.
-    const armPart = socketName.endsWith("Left") ? "ArmLeft" : "ArmRight";
-    const joint = this.avatarJoints.get(armPart);
-
-    this.heldWeapon = new THREE.Group();
-    // Positioned in the joint's local space: the hand relative to the shoulder.
-    const pivot = joint ? joint.position : new THREE.Vector3();
-    this.heldWeapon.position.set(hand[0] - pivot.x, hand[1] - pivot.y, hand[2] - pivot.z);
-
-    for (const part of this.art.partsOf(weaponName)) {
-      const mesh = new THREE.Mesh(part.geometry, this.weaponMaterial(weapon.id, part.group));
-      // Offset so the weapon's grip lands on the hand rather than its origin.
-      mesh.position.set(-grip[0], -grip[1], -grip[2]);
-      mesh.castShadow = true;
-      this.heldWeapon.add(mesh);
-    }
-
-    (joint ?? this.avatar).add(this.heldWeapon);
   }
 
   /** The live state of whatever is in hand. */
@@ -576,11 +646,7 @@ export class Sandbox {
     this.heldWeaponId = weaponId;
     beginEquip(this.weaponState(), weapon, this.tick, TICK_RATE);
 
-    if (this.heldWeapon) {
-      this.heldWeapon.removeFromParent();
-      this.heldWeapon = undefined;
-    }
-    this.attachHeldWeapon();
+    this.avatar.equip(weapon, (id, part) => this.weaponMaterial(id, part));
     this.playUpperBody(weapon.carryPoseId);
     this.say(weapon.displayName.toLowerCase());
   }
@@ -653,22 +719,40 @@ export class Sandbox {
       { blueprint: registry.upperBody(this.upperBodyId), elapsed },
     );
 
-    for (const [part, joint] of this.avatarJoints) {
-      const rotation = pose.rotations[part];
-      joint.rotation.set(rotation?.x ?? 0, rotation?.y ?? 0, rotation?.z ?? 0);
-    }
-
-    // The mesh is authored based at Z=0 facing +Z, so the motor's position and
-    // yaw drive it directly with no offset to get wrong.
-    this.avatar.position.set(
-      this.motor.position.x, this.motor.position.y + pose.bob, this.motor.position.z,
-    );
-    this.avatar.rotation.set(pose.lean, (this.motor.yaw * Math.PI) / 180, 0, "YXZ");
-
     // Crouching squashes rather than swapping mesh: the capsule shrinks by the
     // same ratio, so the proxy stays inside the thing collision actually uses.
     const squash = this.motor.crouched ? movement.crouchHeight / movement.standHeight : 1;
-    this.avatar.scale.set(1, squash, 1);
+    this.avatar.apply(pose, this.motor.position, this.motor.yaw, squash);
+
+    // Eliminated: the figure lies where it fell rather than vanishing, because
+    // a body that disappears makes a kill read as a miss.
+    if (!this.player.alive) this.avatar.root.rotation.x = Math.PI / 2.2;
+
+    this.updateBotAvatars();
+  }
+
+  /**
+   * Pose every bot.
+   *
+   * They do not move, so the locomotion cycle is standing still and the whole
+   * pose is the carry clip -- but it is the same `poseFor` the player uses,
+   * because two pose paths is two sets of bugs.
+   */
+  private updateBotAvatars(): void {
+    const registry = blueprints();
+    const locomotion = registry.locomotion("locomotion.default");
+    const carry = registry.upperBody("upper.carry");
+
+    for (const bot of this.bots) {
+      const pose = poseFor(
+        locomotion,
+        { distanceTravelled: 0, speed: 0, airborne: false, crouched: false },
+        { blueprint: carry, elapsed: 0 },
+      );
+      bot.avatar.apply(pose, bot.spawn, bot.yaw);
+      // Face down when eliminated, for the same reason the player's body does.
+      if (!bot.combatant.alive) bot.avatar.root.rotation.x = Math.PI / 2.2;
+    }
   }
 
   /**
@@ -948,6 +1032,15 @@ export class Sandbox {
       const material = mats[event.code];
       if (material) this.selectedMaterialId = material;
 
+      // Consumables are on their own row: the number keys already mean two
+      // things depending on build mode, and a third meaning would be one too
+      // many for a key you reach for while being shot at.
+      const consumable = SANDBOX_CONSUMABLES.find((c) => c.key === event.code);
+      if (consumable && !event.repeat) {
+        this.tryUseConsumable(consumable.itemId);
+        return;
+      }
+
       if (event.code === "KeyQ") this.buildMode = !this.buildMode;
       // R reloads, as it does in every shooter. Resetting the world is a
       // sandbox convenience and gives up the letter.
@@ -979,7 +1072,21 @@ export class Sandbox {
     for (const id of ["material.wood", "material.stone", "material.metal"]) {
       this.world.wallet(PLAYER_ID).add(blueprints().buildMaterial(id), 500);
     }
-    this.motor = motorAtRest(vec3(0, this.field.sample(0, 0) + 1, 0));
+    // Through the respawn path, so a reset pressed while eliminated puts the
+    // body back on its feet rather than leaving it face down at the spawn.
+    this.respawnPlayer();
+    this.player.eliminations = 0;
+    cancelUse(this.channel);
+    for (const { itemId } of SANDBOX_CONSUMABLES) {
+      this.stock.set(itemId, blueprints().get<ConsumableBlueprint>(itemId).maxStack);
+    }
+    for (const bot of this.bots) this.reviveBot(bot);
+    this.feed.clear();
+    this.damageTaken = 0;
+    this.shieldAbsorbed = 0;
+    this.botShotsFired = 0;
+    this.botHits = 0;
+
     this.say("reset");
   }
 
@@ -1013,10 +1120,27 @@ export class Sandbox {
     this.renderer.render(this.scene, this.camera);
 
     this.hud.update({
-      health: this.pool.health,
-      maxHealth: this.pool.maxHealth,
-      shield: this.pool.shield,
-      maxShield: this.pool.maxShield,
+      health: this.player.pool.health,
+      maxHealth: this.player.pool.maxHealth,
+      shield: this.player.pool.shield,
+      maxShield: this.player.pool.maxShield,
+      alive: this.player.alive,
+      respawnSeconds: this.player.alive
+        ? 0
+        : Math.max(0, (this.player.respawnAtTick - this.tick) / TICK_RATE),
+      eliminations: this.player.eliminations,
+      hurt: now < this.damageFlashUntilMs,
+      feed: [...this.feed.visible(this.tick, FEED_SECONDS * TICK_RATE)],
+      channelLabel: this.channel.active
+        ? blueprints().get<ConsumableBlueprint>(this.channel.itemId).displayName
+        : "",
+      channelFraction: channelFraction(this.channel, this.tick),
+      consumables: SANDBOX_CONSUMABLES.map(({ itemId, label }) => ({
+        id: itemId,
+        key: label,
+        name: blueprints().get<ConsumableBlueprint>(itemId).displayName,
+        count: this.stock.get(itemId) ?? 0,
+      })),
       materials: this.world.wallet(PLAYER_ID).snapshot(),
       selectedMaterialId: this.selectedMaterialId,
       selectedPieceId: this.selectedPieceId,
@@ -1029,13 +1153,21 @@ export class Sandbox {
   }
 
   private simulate(): void {
-    let flags: number = MoveFlags.None;
-    if (this.jumpQueued) flags |= MoveFlags.Jump;
-    if (this.keys.has("ShiftLeft") || this.keys.has("ShiftRight")) flags |= MoveFlags.Sprint;
-    if (this.keys.has("ControlLeft") || this.keys.has("KeyV")) flags |= MoveFlags.Crouch;
+    this.tickRespawns();
 
-    const forward = (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0);
-    const strafe = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0);
+    // Eliminated players do not act. Gravity still applies, so a body dropped
+    // in mid-air lands rather than hanging there.
+    const dead = !this.player.alive;
+
+    let flags: number = MoveFlags.None;
+    if (!dead) {
+      if (this.jumpQueued) flags |= MoveFlags.Jump;
+      if (this.keys.has("ShiftLeft") || this.keys.has("ShiftRight")) flags |= MoveFlags.Sprint;
+      if (this.keys.has("ControlLeft") || this.keys.has("KeyV")) flags |= MoveFlags.Crouch;
+    }
+
+    const forward = dead ? 0 : (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0);
+    const strafe = dead ? 0 : (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0);
 
     const command = moveCommand(
       this.tick, vec2(strafe, forward), this.lookDelta, flags, TICK_DELTA,
@@ -1047,8 +1179,16 @@ export class Sandbox {
     this.motor = stepped.state;
 
     if (stepped.result.fallDamage > 0) {
-      this.pool.health = Math.max(0, this.pool.health - stepped.result.fallDamage);
+      // Through the pool rather than straight at the health field: a fall that
+      // takes the last of it is an elimination like any other, and the only
+      // difference from a bullet is that it ignores shield (movement.md 5).
+      const outcome = damageHealthDirectly(
+        this.player, stepped.result.fallDamage, this.tick,
+        PLAYER_RESPAWN_SECONDS * TICK_RATE,
+      );
+      this.onPlayerDamaged(outcome.toHealth);
       this.say(`fall damage ${Math.round(stepped.result.fallDamage)}`);
+      if (outcome.eliminated) this.eliminatePlayer("the fall", "");
     }
 
     // The eye, not the feet: build range is measured from where the player
@@ -1060,6 +1200,18 @@ export class Sandbox {
     // while you run, and bloom recovers while you hold fire.
     const held = blueprints().weapon(this.heldWeaponId);
     tickWeapon(this.weaponState(), held, this.tick, TICK_DELTA);
+
+    this.tickChannel();
+    this.tickBots();
+
+    if (dead) {
+      // Still release the trigger, or the weapon believes it is held down
+      // through the respawn and refuses the first shot of the next life.
+      tryFire(this.weaponState(), held, this.tick, TICK_RATE, false);
+      this.primaryPressed = false;
+      this.tick++;
+      return;
+    }
 
     if (this.buildMode) {
       if (this.primaryPressed) this.tryPlace();
@@ -1283,6 +1435,19 @@ export class Sandbox {
     // world, so the trace does not know about them.
     const prop = this.propAlongRay(eye, direction, SHOT_RANGE);
     const trace = this.collision.trace(eye, direction, SHOT_RANGE);
+    const onBot = this.botAlongRay(eye, direction, SHOT_RANGE);
+
+    // A bot first, when it is the nearest of the three. Structures shield the
+    // thing behind them, which is the whole reason to build.
+    if (
+      onBot
+      && onBot.hit.distance <= trace.distance
+      && (!prop || onBot.hit.distance <= prop.distance)
+    ) {
+      this.shootBot(onBot.bot, onBot.hit, weapon);
+      this.spawnTracer(eye, onBot.hit.point);
+      return;
+    }
 
     if (prop && prop.distance < trace.distance) {
       const damage = computeDamage({
@@ -1315,6 +1480,298 @@ export class Sandbox {
   }
 
   /** Nearest harvestable the ray passes close enough to count as a hit. */
+  // -----------------------------------------------------------------------
+  // Staying alive
+  // -----------------------------------------------------------------------
+
+  /** Stand back up anything whose respawn tick has come round. */
+  private tickRespawns(): void {
+    if (!this.player.alive && this.tick >= this.player.respawnAtTick) this.respawnPlayer();
+    for (const bot of this.bots) {
+      if (readyToRespawn(bot.combatant, this.tick)) this.reviveBot(bot);
+    }
+  }
+
+  private respawnPlayer(): void {
+    respawnCombatant(this.player);
+    this.motor = motorAtRest(this.spawnPoint);
+    this.avatar.root.rotation.x = 0;
+    this.say("respawned");
+  }
+
+  private reviveBot(bot: BotInstance): void {
+    respawnCombatant(bot.combatant);
+    resetBotState(bot.brain);
+    // A fresh magazine too: a bot that came back mid-reload would stand there
+    // holding an empty gun for the rest of the session.
+    Object.assign(bot.weapon, freshWeaponState(blueprints().weapon(bot.blueprint.weaponId)));
+    bot.avatar.root.rotation.x = 0;
+    bot.shotsFired = 0;
+  }
+
+  /** Bookkeeping for a hit the player took, whatever dealt it. */
+  private onPlayerDamaged(toHealth: number, toShield = 0): void {
+    if (toHealth <= 0 && toShield <= 0) return;
+    this.damageTaken += toHealth + toShield;
+    this.shieldAbsorbed += toShield;
+    this.damageFlashUntilMs = performance.now() + DAMAGE_FLASH_SECONDS * 1000;
+
+    // Taking a hit interrupts a heal, and the item is not spent: it is
+    // consumed on completion, so an interrupted heal costs time only.
+    if (this.channel.active) {
+      const item = blueprints().get<ConsumableBlueprint>(this.channel.itemId);
+      if (interruptOnDamage(this.channel, item)) {
+        this.say(`${item.displayName.toLowerCase()} interrupted`);
+      }
+    }
+  }
+
+  private eliminatePlayer(attackerName: string, weaponName: string): void {
+    cancelUse(this.channel);
+    this.feed.record(attackerName, this.player.displayName, weaponName, false, this.tick);
+    this.say(`eliminated by ${attackerName}`);
+  }
+
+  /** Finish a consumable whose channel has run its course. */
+  private tickChannel(): void {
+    if (!this.channel.active) return;
+    const item = blueprints().get<ConsumableBlueprint>(this.channel.itemId);
+    const done = completeUse(this.channel, item, this.player.pool, this.tick);
+    if (!done) return;
+
+    if (done.consumed) {
+      this.stock.set(item.id, Math.max(0, (this.stock.get(item.id) ?? 0) - 1));
+    }
+    this.say(
+      done.shielded > 0
+        ? `+${Math.round(done.shielded)} shield`
+        : `+${Math.round(done.healed)} health`,
+    );
+  }
+
+  private tryUseConsumable(itemId: string): void {
+    if (!this.player.alive) return;
+    const item = blueprints().get<ConsumableBlueprint>(itemId);
+    const have = this.stock.get(itemId) ?? 0;
+
+    if (beginUse(this.channel, item, this.player.pool, have, this.tick, TICK_RATE)) {
+      this.say(`using ${item.displayName.toLowerCase()}`);
+      return;
+    }
+    if (this.channel.active) return;                     // already using something
+    this.say(have <= 0 ? `no ${item.displayName.toLowerCase()} left` : "nothing to restore");
+  }
+
+  // -----------------------------------------------------------------------
+  // Bots
+  // -----------------------------------------------------------------------
+
+  /** Where a bot aims: the chest, not the feet and not the eyes. */
+  private playerAimPoint(): Vec3 {
+    const character = blueprints().character("character.default");
+    return vec3(
+      this.motor.position.x,
+      this.motor.position.y + character.cameraHeight * 0.75,
+      this.motor.position.z,
+    );
+  }
+
+  private tickBots(): void {
+    const registry = blueprints();
+    const aimPoint = this.playerAimPoint();
+
+    for (const bot of this.bots) {
+      const weapon = registry.weapon(bot.blueprint.weaponId);
+      tickWeapon(bot.weapon, weapon, this.tick, TICK_DELTA);
+
+      // Cleared every tick, because the sight check below only runs when the
+      // bot would otherwise fire: a stale true on a bot that stopped looking
+      // would be a lie in the debug window and in the smoke test.
+      bot.sawTarget = false;
+
+      if (!bot.combatant.alive) {
+        tryFire(bot.weapon, weapon, this.tick, TICK_RATE, false);
+        continue;
+      }
+
+      const eye = bot.avatar.eyePosition();
+      const dx = aimPoint.x - eye.x;
+      const dy = aimPoint.y - eye.y;
+      const dz = aimPoint.z - eye.z;
+      const distance = Math.hypot(dx, dy, dz);
+      const direction = vec3(dx / distance, dy / distance, dz / distance);
+
+      const action = decideBot(
+        bot.brain,
+        bot.blueprint,
+        {
+          targetAlive: this.player.alive,
+          distanceMetres: distance,
+          // Anything solid in the way -- a wall you built, a tree you ran
+          // behind. This is what makes building worth doing against them, and
+          // it is a function so that a bot with nobody in range never pays for
+          // the ray march.
+          hasLineOfSight: () => {
+            bot.sawTarget = this.clearLineTo(eye, direction, distance);
+            return bot.sawTarget;
+          },
+        },
+        this.tick,
+        TICK_RATE,
+      );
+
+      // Turn to face what it is shooting at, so a bot in a fight is not firing
+      // out of the side of its head.
+      if (action !== "idle") bot.yaw = (Math.atan2(dx, dz) * 180) / Math.PI;
+
+      if (action !== "fire") {
+        // Releasing matters for the same reason it does for the player: a
+        // semi-auto that believes the trigger is still down never fires again.
+        tryFire(bot.weapon, weapon, this.tick, TICK_RATE, false);
+        if (bot.weapon.ammoInMagazine <= 0) {
+          tryBeginReload(bot.weapon, weapon, this.tick, TICK_RATE, SANDBOX_RESERVE_AMMO);
+        }
+        continue;
+      }
+
+      const rejection = tryFire(bot.weapon, weapon, this.tick, TICK_RATE, true);
+      if (rejection === FireRejection.MagazineEmpty) {
+        tryBeginReload(bot.weapon, weapon, this.tick, TICK_RATE, SANDBOX_RESERVE_AMMO);
+        continue;
+      }
+      if (rejection !== FireRejection.None) continue;
+
+      this.botShoot(bot, weapon.id, eye, direction);
+    }
+  }
+
+  /** Nothing solid between two points. Terrain, structures and props all count. */
+  private clearLineTo(eye: Vec3, direction: Vec3, distance: number): boolean {
+    // A coarser step than a bullet uses: this asks whether a wall is in the
+    // way, not exactly where, and 0.4 m cannot miss a 4 m piece.
+    const trace = this.collision.trace(eye, direction, distance, 0.4);
+    if (trace.kind !== "none" && trace.distance < distance) return false;
+    const prop = this.propAlongRay(eye, direction, distance);
+    return !prop || prop.distance >= distance;
+  }
+
+  /**
+   * One bot's shot.
+   *
+   * It goes through the same pellet cone, the same damage formula and the same
+   * structure damage the player's shots do. The only thing that makes it a bot
+   * shot is where the cone's width comes from: its Blueprint's aim error on top
+   * of the weapon's own spread.
+   */
+  private botShoot(bot: BotInstance, weaponId: string, eye: Vec3, aim: Vec3): void {
+    const registry = blueprints();
+    const weapon = registry.weapon(weaponId);
+    const profile = registry.damageProfile(weapon.damageProfileId);
+    const spread = weapon.spreadDegrees + bot.blueprint.aimErrorDegrees;
+    const seed = (bot.combatant.id * 2654435761) ^ this.tick;
+
+    bot.shotsFired++;
+    this.botShotsFired++;
+
+    for (let pellet = 0; pellet < Math.max(1, weapon.pelletCount); pellet++) {
+      const direction = pelletDirection(aim, spread, seed, pellet);
+      const trace = this.collision.trace(eye, direction, SHOT_RANGE);
+      const onPlayer = this.avatar.trace(eye, direction, SHOT_RANGE);
+
+      if (onPlayer && this.player.alive && onPlayer.distance <= trace.distance) {
+        const split = applyHit(
+          {
+            profile,
+            targetKind: "player",
+            hitbox: onPlayer.hitbox,
+            distanceMetres: onPlayer.distance,
+          },
+          this.player.pool.shield,
+          this.player.pool.health,
+        );
+        const outcome = damageCombatant(
+          this.player, split, bot.combatant.id, this.tick,
+          PLAYER_RESPAWN_SECONDS * TICK_RATE,
+        );
+        this.onPlayerDamaged(outcome.toHealth, outcome.toShield);
+        if (outcome.eliminated) {
+          bot.combatant.eliminations++;
+          this.eliminatePlayer(bot.combatant.displayName, weapon.displayName);
+        }
+        this.spawnTracer(eye, onPlayer.point);
+        continue;
+      }
+
+      // It missed the player and met the world. A bot shooting your wall down
+      // is the point: cover has to be spendable or it is just a wall.
+      if (trace.kind === "structure" && trace.cell && trace.slot !== undefined) {
+        const damage = computeDamage({
+          profile, targetKind: "structure", distanceMetres: trace.distance,
+        });
+        this.world.applyDamage(trace.cell, trace.slot, damage, this.tick);
+      }
+      this.spawnTracer(eye, trace.point);
+    }
+  }
+
+  /** The nearest live bot a ray strikes. */
+  private botAlongRay(
+    eye: Vec3, direction: Vec3, maxDistance: number,
+  ): { bot: BotInstance; hit: HitboxHit } | undefined {
+    let best: { bot: BotInstance; hit: HitboxHit } | undefined;
+    for (const bot of this.bots) {
+      if (!bot.combatant.alive) continue;
+      const hit = bot.avatar.trace(eye, direction, maxDistance);
+      if (!hit) continue;
+      if (best && hit.distance >= best.hit.distance) continue;
+      best = { bot, hit };
+    }
+    return best;
+  }
+
+  /**
+   * Land one of the player's pellets on a bot.
+   *
+   * The hitbox comes from the part the ray actually met, so a headshot is a
+   * shot that hit the head rather than a shot that was aimed high. What that is
+   * worth is `damageProfile.headshotMultiplier` -- this makes no such decision.
+   */
+  private shootBot(bot: BotInstance, hit: HitboxHit, weapon: { damageProfileId: string }): void {
+    const registry = blueprints();
+    const profile = registry.damageProfile(weapon.damageProfileId);
+
+    const split = applyHit(
+      { profile, targetKind: "player", hitbox: hit.hitbox, distanceMetres: hit.distance },
+      bot.combatant.pool.shield,
+      bot.combatant.pool.health,
+    );
+    const outcome = damageCombatant(
+      bot.combatant, split, PLAYER_ID, this.tick,
+      bot.blueprint.respawnSeconds * TICK_RATE,
+    );
+    if (outcome.toShield <= 0 && outcome.toHealth <= 0) return;
+
+    this.botHits++;
+    // Being shot is what turns a bot that ignores you into one that does not,
+    // however far away you were when you did it.
+    provoke(bot.brain);
+
+    const headshot = hit.hitbox?.isHead ?? false;
+    this.shotHits.add(
+      `bot:${bot.combatant.id}`, "player", outcome.toShield + outcome.toHealth,
+      hit.point, headshot, outcome.eliminated,
+    );
+
+    if (outcome.eliminated) {
+      this.player.eliminations++;
+      const weaponName = registry.weapon(this.heldWeaponId).displayName;
+      this.feed.record(
+        this.player.displayName, bot.combatant.displayName, weaponName, headshot, this.tick,
+      );
+      this.say(`eliminated ${bot.combatant.displayName.toLowerCase()}`);
+    }
+  }
+
   private propAlongRay(
     eye: Vec3, direction: Vec3, maxDistance: number,
   ): { prop: PropInstance; distance: number; point: Vec3 } | undefined {

@@ -306,6 +306,41 @@ export interface CharacterBlueprint extends BlueprintBase {
   readonly partTextures?: Readonly<Record<string, string>>;
 }
 
+/**
+ * A stand-in opponent.
+ *
+ * Until netcode lands there is nobody to fight, which leaves health, shields
+ * and elimination untestable in play: the storm and a fall both bypass shield
+ * by design, so without something shooting back a shield potion is decoration.
+ * A bot is the smallest thing that makes those systems real, and every number
+ * it fights by is here rather than in code -- a harder opponent is an edited
+ * Blueprint, not an edited class.
+ */
+export interface BotBlueprint extends BlueprintBase {
+  /** The character it wears: health, hitboxes and mesh all come from there. */
+  readonly characterId: string;
+  readonly weaponId: string;
+  /** Shield it spawns with. Its health comes from the character. */
+  readonly startingShield: number;
+  /** It opens fire on a player this close with a clear line. 0 never does. */
+  readonly engageRangeMetres: number;
+  /** Delay between seeing a target and firing. Zero is a machine, not a player. */
+  readonly reactionSeconds: number;
+  /**
+   * Trigger discipline, in seconds between pulls.
+   *
+   * Separate from the weapon's fire rate: a bot holding the trigger of a 600
+   * rpm rifle is not a difficulty setting, it is a wood chipper.
+   */
+  readonly secondsBetweenShots: number;
+  /** Cone half-angle its aim wanders inside. Its only source of inaccuracy. */
+  readonly aimErrorDegrees: number;
+  /** Seconds from elimination to standing back up. */
+  readonly respawnSeconds: number;
+  /** Shoots back at whoever hit it, whatever the engage range says. */
+  readonly retaliates: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Match
 // ---------------------------------------------------------------------------
@@ -409,6 +444,7 @@ export interface BlueprintLibrary {
   readonly lootTables: readonly LootTableBlueprint[];
   readonly movement: readonly MovementBlueprint[];
   readonly characters: readonly CharacterBlueprint[];
+  readonly bots: readonly BotBlueprint[];
   readonly locomotion: readonly LocomotionBlueprint[];
   readonly upperBody: readonly UpperBodyBlueprint[];
   readonly stormPhases: readonly StormPhaseBlueprint[];

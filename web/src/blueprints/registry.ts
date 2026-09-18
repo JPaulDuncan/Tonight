@@ -16,6 +16,7 @@
 import type {
   BlueprintBase,
   BlueprintLibrary,
+  BotBlueprint,
   BuildMaterialBlueprint,
   BuildPieceBlueprint,
   CharacterBlueprint,
@@ -93,6 +94,7 @@ export class BlueprintRegistry {
   lootTable(id: string): LootTableBlueprint { return this.get<LootTableBlueprint>(id); }
   movement(id: string): MovementBlueprint { return this.get<MovementBlueprint>(id); }
   character(id: string): CharacterBlueprint { return this.get<CharacterBlueprint>(id); }
+  bot(id: string): BotBlueprint { return this.get<BotBlueprint>(id); }
   locomotion(id: string): LocomotionBlueprint { return this.get<LocomotionBlueprint>(id); }
   upperBody(id: string): UpperBodyBlueprint { return this.get<UpperBodyBlueprint>(id); }
   stormPhase(id: string): StormPhaseBlueprint { return this.get<StormPhaseBlueprint>(id); }
@@ -344,6 +346,49 @@ export function validateLibrary(library: BlueprintLibrary): Finding[] {
     const movement = library.movement.find((m) => m.id === c.movementId);
     if (movement && c.cameraHeight >= movement.standHeight) {
       error("cameraHeight must be below the standing capsule height.", c.id);
+    }
+  }
+
+  // --- bots ---------------------------------------------------------------
+  //
+  // A bot is difficulty expressed as data, so these checks are about it being a
+  // fight rather than a formality. A bot that never fires is not an error: that
+  // is what a target dummy is, and it is expressed as engageRangeMetres 0 with
+  // retaliates false rather than as a second class.
+  for (const b of library.bots) {
+    requireRef(b.characterId, b.id, "characterId");
+    requireRef(b.weaponId, b.id, "weaponId");
+    if (b.startingShield < 0) error("startingShield cannot be negative.", b.id);
+    if (b.engageRangeMetres < 0) error("engageRangeMetres cannot be negative.", b.id);
+    if (b.reactionSeconds < 0) error("reactionSeconds cannot be negative.", b.id);
+    if (b.aimErrorDegrees < 0) error("aimErrorDegrees cannot be negative.", b.id);
+    if (b.respawnSeconds <= 0) {
+      error("respawnSeconds must be positive, or an eliminated bot never returns.", b.id);
+    }
+
+    const character = library.characters.find((c) => c.id === b.characterId);
+    if (character && b.startingShield > character.maxShield) {
+      error(
+        `startingShield ${b.startingShield} exceeds the character's maxShield ` +
+          `${character.maxShield}, so the bot would spawn with a shield it cannot hold.`,
+        b.id,
+      );
+    }
+
+    const weapon = library.weapons.find((w) => w.id === b.weaponId);
+    if (weapon && weapon.weaponClass === "melee") {
+      // Nothing here moves a bot, so a melee bot is a scarecrow that thinks it
+      // is fighting.
+      error("A bot with a melee weapon can never reach anything: it does not move.", b.id);
+    }
+    if (weapon && b.secondsBetweenShots < 60 / weapon.fireRateRpm) {
+      // Trigger discipline slower than the weapon is the point; faster than it
+      // is a number that does nothing, because tryFire still owns the cooldown.
+      warn(
+        `secondsBetweenShots ${b.secondsBetweenShots} is shorter than the weapon's own ` +
+          "fire interval, so the weapon's rate decides and this field is inert.",
+        b.id,
+      );
     }
   }
 

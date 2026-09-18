@@ -137,7 +137,12 @@ Weapons, damage, loot. Still single-player, against dummies.
       the hit point, coloured per target kind; one shot raises one marker and
       one number per target, so a shotgun shell reads as a single total rather
       than ten figures on one pixel.
+- [x] Health, shields and elimination, against bots that shoot back. One
+      `Combatant` type covers the player and every bot, shields are spent before
+      health, consumables channel and are spent on completion, and an
+      eliminated player or bot respawns on its Blueprint's timer.
 - [x] **A new weapon needs one JSON entry and one mesh.**
+- [x] **A harder opponent needs one JSON entry and no code.**
 
 **Risk retired:** combat feel is achievable with the chosen feedback model.
 

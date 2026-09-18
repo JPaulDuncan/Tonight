@@ -27,6 +27,34 @@ async function nudge(dx, dy) {
   await page.waitForTimeout(70);
 }
 
+// Under pointer lock a click at a fixed point is also a look delta, because the
+// game reads the move between the last position and this one. Clicking where
+// the cursor already is keeps the aim where the phase put it.
+async function clickHere() {
+  await page.mouse.click(cursorX, cursorY);
+}
+
+const survival = () => page.evaluate(() => window.__tonight?.describeSurvival?.());
+const avatarState = () => page.evaluate(() => window.__tonight?.describeAvatar?.());
+
+/** Turn until the crosshair is on a bot, using the yaw the game reports. */
+async function faceBot(index) {
+  for (let attempt = 0; attempt < 14; attempt++) {
+    const [state, me] = [await survival(), await avatarState()];
+    const bot = state?.bots?.[index];
+    if (!bot || !me) return false;
+    const want = (Math.atan2(
+      bot.position[0] - me.position[0], bot.position[2] - me.position[2],
+    ) * 180) / Math.PI;
+    let delta = want - me.yaw;
+    while (delta > 180) delta -= 360;
+    while (delta < -180) delta += 360;
+    if (Math.abs(delta) < 0.5) return true;
+    await nudge(delta / 0.12, 0);
+  }
+  return false;
+}
+
 page.on("console", (m) => { logs.push(`${m.type()}: ${m.text()}`); });
 page.on("pageerror", (e) => errors.push(String(e)));
 
@@ -527,6 +555,215 @@ for (const piece of pieces) {
     if (Math.abs(piece.min[axis] % CELL) > 0.5 && Math.abs(Math.abs(piece.min[axis] % CELL) - CELL) > 0.5) {
       errors.push(`${piece.key} min[${axis}]=${piece.min[axis]} is not near a 4 m grid line`);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Health, shields and elimination.
+//
+// The arithmetic is unit-tested; what only a browser can check is that the
+// pieces are joined up -- that a shot finds a bot's hitbox, that a shield is
+// spent before health, that a bot returns fire, that a wall stops it, and that
+// an eliminated player comes back.
+// ---------------------------------------------------------------------------
+
+await page.keyboard.press("Backspace");        // clear the world, refill the stocks
+await page.waitForTimeout(400);
+await ensureBuildMode(false);
+
+const startState = await survival();
+if (!startState) {
+  errors.push("no survival state to read: the bots never spawned");
+} else {
+  console.log("bots:", JSON.stringify(startState.bots.map((b) => `${b.id}@${b.distance}m`)));
+  if (startState.bots.length === 0) errors.push("no bots in the world");
+  // The spawn has to be safe: skirmishers standing inside their own engage
+  // range would open fire on a player who has not moved yet.
+  const nearest = Math.min(
+    ...startState.bots.filter((b) => b.id === "bot.skirmisher").map((b) => b.distance),
+  );
+  if (nearest < 22) errors.push(`a skirmisher spawns ${nearest} m away, inside its engage range`);
+}
+
+// --- shoot one down --------------------------------------------------------
+await page.keyboard.press("Digit2");           // assault rifle
+await page.waitForTimeout(700);
+const aimed = await faceBot(0);
+if (!aimed) errors.push("could not turn to face a bot");
+
+let healthFellFirst = false;
+let killed = false;
+await page.mouse.down();
+for (let i = 0; i < 20; i++) {
+  await page.waitForTimeout(150);
+  const now = await survival();
+  const bot = now?.bots?.[0];
+  if (!bot) break;
+  // Shield before health, per combat.md section 1. Sampled as the invariant
+  // rather than as a moment: a rifle strips 50 shield in two rounds, so
+  // "catch it with the shield down and the health full" is a race with the
+  // poll interval, while "health never falls while shield remains" is true on
+  // every frame.
+  if (bot.shield > 0 && bot.health < 100) healthFellFirst = true;
+  if (!bot.alive) { killed = true; break; }
+}
+await page.mouse.up();
+await page.waitForTimeout(300);
+
+const afterKill = await survival();
+console.log("after shooting a bot:", JSON.stringify({
+  bot: afterKill?.bots?.[0], elims: afterKill?.player?.eliminations, feed: afterKill?.feed,
+}));
+
+if (!killed) errors.push("a magazine into a bot did not eliminate it");
+if (healthFellFirst) errors.push("the bot's health fell while it still had shield");
+if (afterKill?.player?.eliminations !== 1) {
+  errors.push(`elimination count is ${afterKill?.player?.eliminations}, expected 1`);
+}
+if (!afterKill?.feed?.some((e) => e.victim === "Target Bot" && e.attacker === "You")) {
+  errors.push(`the kill feed says ${JSON.stringify(afterKill?.feed)}`);
+}
+if (!(afterKill?.bots?.[0]?.respawnIn > 0)) errors.push("the eliminated bot is not counting down");
+
+await page.waitForTimeout(900);
+const countingDown = await survival();
+if (!(countingDown.bots[0].respawnIn < afterKill.bots[0].respawnIn)) {
+  errors.push("the respawn countdown is not moving");
+}
+
+// --- a shield potion -------------------------------------------------------
+await page.keyboard.press("KeyF");             // small shield potion, 2 s
+await page.waitForTimeout(500);
+const channelling = await survival();
+console.log("mid-channel:", JSON.stringify(channelling.channel));
+if (!channelling.channel.active) errors.push("the shield potion did not start channelling");
+if (channelling.player.shield !== 0) errors.push("the shield arrived before the channel finished");
+
+await page.waitForTimeout(2200);
+const shielded = await survival();
+console.log("after the potion:", JSON.stringify({
+  shield: shielded.player.shield, left: shielded.stock["consumable.miniShield"],
+}));
+if (shielded.player.shield <= 0) errors.push("the potion finished but gave no shield");
+if (shielded.stock["consumable.miniShield"] !== channelling.stock["consumable.miniShield"] - 1) {
+  errors.push("the potion was not spent on completion");
+}
+
+// --- walk into a fight -----------------------------------------------------
+//
+// Closing in steps rather than one long press: a tree or a rise can stop the
+// walk short, and a phase that asserts a bot opened fire has to actually be
+// inside the range it opens fire at.
+const SKIRMISHER = 2;
+let closed = 0;
+for (let step = 0; step < 14; step++) {
+  const now = await survival();
+  closed = now.bots[SKIRMISHER].distance;
+  if (closed < 15) break;
+  await faceBot(SKIRMISHER);
+  await page.keyboard.down("KeyW");
+  await page.waitForTimeout(400);
+  await page.keyboard.up("KeyW");
+  await page.waitForTimeout(80);
+}
+console.log(`closed to ${closed} m of the skirmisher`);
+if (closed >= 22) errors.push(`could not get inside the bot's ${closed} m engage range`);
+
+let underFire = null;
+for (let i = 0; i < 14; i++) {
+  await page.waitForTimeout(500);
+  const now = await survival();
+  if (now.player.damageTaken > 0) { underFire = now; break; }
+}
+console.log("under fire:", JSON.stringify(underFire && {
+  hp: underFire.player.health, shield: underFire.player.shield,
+  taken: underFire.player.damageTaken, absorbed: underFire.player.shieldAbsorbed,
+  botShots: underFire.botShotsFired,
+}));
+
+if (!underFire) {
+  errors.push("walked into a skirmisher's range and it never fired");
+} else if (underFire.player.shieldAbsorbed <= 0) {
+  errors.push("the player took damage with a shield up and none of it was absorbed");
+}
+
+// --- and build cover -------------------------------------------------------
+// Facing it first, because the piece goes where the crosshair is and a wall
+// behind you is not cover -- then looking down, because a crosshair level with
+// a bot 14 m away points at nothing placeable.
+await faceBot(SKIRMISHER);
+await nudge(0, 160);                           // about 19 degrees down
+await ensureBuildMode(true);
+await page.keyboard.press("Digit1");
+await page.waitForTimeout(120);
+await clickHere();
+await page.waitForTimeout(400);
+
+const cover = await page.evaluate(() => window.__tonight?.describePieces?.() ?? []);
+console.log("cover:", JSON.stringify(cover.map((p) => p.key)));
+if (cover.length === 0) errors.push("could not build a wall to hide behind");
+
+const behindCover = await survival();
+await page.waitForTimeout(3000);
+const stillBehind = await survival();
+const throughTheWall = stillBehind.player.damageTaken - behindCover.player.damageTaken;
+console.log("behind cover:", JSON.stringify({
+  sees: stillBehind.bots[SKIRMISHER].sees, tookThrough: throughTheWall,
+}));
+
+if (stillBehind.bots[SKIRMISHER].sees) {
+  errors.push("the bot still sees the player through a freshly built wall");
+} else if (throughTheWall > 0) {
+  errors.push(`${throughTheWall} damage came through the wall`);
+}
+
+// --- step out and die ------------------------------------------------------
+// Sideways, not forward: forward is into the wall that was just built.
+await ensureBuildMode(false);
+await page.keyboard.down("KeyD");
+await page.waitForTimeout(1300);
+await page.keyboard.up("KeyD");
+
+let eliminated = null;
+for (let i = 0; i < 40; i++) {
+  await page.waitForTimeout(600);
+  const now = await survival();
+  if (!now.player.alive) { eliminated = now; break; }
+}
+console.log("eliminated:", JSON.stringify(eliminated && {
+  hp: eliminated.player.health, feed: eliminated.feed.slice(0, 1),
+}));
+
+if (!eliminated) {
+  errors.push("standing in front of an armed bot for 24 s did not eliminate the player");
+} else {
+  if (eliminated.player.health !== 0) errors.push("eliminated with health left");
+  if (!eliminated.feed.some((e) => e.victim === "You")) {
+    errors.push("nothing in the kill feed says the player went down");
+  }
+
+  // Frozen while down: a corpse that can still walk is not a corpse.
+  const before = await avatarState();
+  await page.keyboard.down("KeyW");
+  await page.waitForTimeout(500);
+  await page.keyboard.up("KeyW");
+  const after = await avatarState();
+  const moved = Math.hypot(
+    after.position[0] - before.position[0], after.position[2] - before.position[2],
+  );
+  if (moved > 0.1) errors.push(`the eliminated player walked ${moved.toFixed(2)} m`);
+
+  await page.waitForTimeout(4500);
+  const respawned = await survival();
+  const where = await avatarState();
+  console.log("respawned:", JSON.stringify({
+    hp: respawned.player.health, shield: respawned.player.shield, at: where.position,
+  }));
+  if (!respawned.player.alive) errors.push("the player never came back");
+  if (respawned.player.health !== 100) errors.push("respawned with less than full health");
+  if (respawned.player.shield !== 0) errors.push("respawned with a shield: it is looted, not granted");
+  if (Math.hypot(where.position[0], where.position[2]) > 1) {
+    errors.push("respawned somewhere other than the spawn point");
   }
 }
 

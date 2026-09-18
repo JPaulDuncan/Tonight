@@ -48,6 +48,26 @@ Consumption on completion rather than on start means an interrupted heal wastes
 time but not the item — being punished twice for being caught mid-heal felt bad
 in every game that has tried it.
 
+### 3.1 What is built
+
+The channel is implemented in `web/src/gameplay/consumable.ts` as a tick-driven
+state machine, and it is wired to the sandbox: four keys, a channel bar, and a
+stock count per item. Three things fell out of building it that the spec above
+only implies:
+
+- **A use that would restore nothing is refused.** A bandage at full health is
+  not a heal, it is three seconds and one fewer bandage. So is a bandage at 80
+  health, because it caps at 75.
+- **`cancelOnDamage` is per item, not a global rule.** Nothing in the shipped
+  set heals through damage, but an item that did would need no new code.
+- **The interrupt is driven from the damage path**, not polled. Anything that
+  hurts the player — a bot, a fall — calls the same function, so there is one
+  place that decides a heal has been interrupted.
+
+The rest of the inventory is still unported: slots, stacking and pickup are
+Unity-era code. The sandbox hands out a full stack of each consumable, the way
+it hands out 500 of each material.
+
 ## 4. Death
 
 The full inventory drops as a pile at the death position, preserving exact state.

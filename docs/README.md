@@ -29,6 +29,7 @@ surface, the server-authoritative rules, and the test plan.
 | [systems/movement.md](systems/movement.md) | Locomotion, sprint, mantle, fall damage |
 | [systems/building.md](systems/building.md) | Grid, piece placement, structural integrity, editing |
 | [systems/combat.md](systems/combat.md) | Weapons, hitreg, damage, bloom/spread, headshots |
+| [systems/bots.md](systems/bots.md) | Stand-in opponents: engage rules, aim, trigger discipline |
 | [systems/harvesting.md](systems/harvesting.md) | Resource gathering from world props |
 | [systems/loot.md](systems/loot.md) | Rarity, loot tables, chests, floor spawns |
 | [systems/storm.md](systems/storm.md) | Zone phases, damage curve, circle placement |

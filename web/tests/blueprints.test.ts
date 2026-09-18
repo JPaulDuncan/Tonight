@@ -148,6 +148,32 @@ describe("validator catches broken content", () => {
     broken.matchRules[0]!.squadSize = 4;
     expect(errors(validateLibrary(broken)).some((f) => f.message.includes("divide evenly"))).toBe(true);
   });
+
+  it("reports a bot carrying more shield than it can hold", () => {
+    const broken = clone();
+    broken.bots[0]!.startingShield = 500;
+    expect(errors(validateLibrary(broken)).some((f) => f.message.includes("maxShield"))).toBe(true);
+  });
+
+  it("reports a bot that never comes back", () => {
+    const broken = clone();
+    broken.bots[0]!.respawnSeconds = 0;
+    expect(errors(validateLibrary(broken)).some((f) => f.message.includes("never returns"))).toBe(true);
+  });
+
+  it("reports a bot holding a pickaxe", () => {
+    // Nothing moves a bot, so a melee bot is a scarecrow that thinks it is
+    // fighting -- and it would read as a broken AI rather than as bad content.
+    const broken = clone();
+    broken.bots[1]!.weaponId = "weapon.pickaxe";
+    expect(errors(validateLibrary(broken)).some((f) => f.message.includes("does not move"))).toBe(true);
+  });
+
+  it("warns when a bot's trigger discipline is faster than its gun", () => {
+    const broken = clone();
+    broken.bots[1]!.secondsBetweenShots = 0.01;
+    expect(warnings(validateLibrary(broken)).some((f) => f.message.includes("inert"))).toBe(true);
+  });
 });
 
 describe("edit masks", () => {

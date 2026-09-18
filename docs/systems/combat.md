@@ -16,6 +16,32 @@ straight to health.
 Neither pool regenerates. Healing is consumable-only, which is what makes
 disengaging after a fight a real decision rather than a wait.
 
+Shield starts empty and is looted, never granted: a player who has not found a
+potion is a player with 100 effective health. Two damage sources bypass the
+shield entirely — a fall ([movement.md](movement.md) §5) and the storm
+([storm.md](storm.md)) — which is why neither of them can stand in for an
+opponent when the question is whether shields work. That is what
+[bots.md](bots.md) exists for.
+
+### 1.1 Combatants
+
+The player and every bot are one type, `Combatant`: a pool, an alive flag, a
+respawn tick and who hit it last. The moment the player is a special case the
+damage path forks and the two halves drift, so there is one path and the only
+difference between a player and a bot is what decides its inputs.
+
+`damageCombatant` returns whether *this* hit eliminated the target, rather than
+leaving the caller to check `alive` afterwards. Two pellets of one shotgun shell
+both land on somebody with 5 health left, and only the first of them eliminated
+anybody — a caller reading `alive` after the fact would post two kill-feed lines
+and count two eliminations.
+
+Elimination is not deletion: the body stays where it fell, the feed records
+attacker, weapon and whether it was a headshot, and the combatant stands back up
+on its own timer (four seconds for the player in the sandbox,
+`BotBlueprint.respawnSeconds` for a bot). A match will replace the respawn with
+spectating; everything above it stays.
+
 ## 2. The damage formula
 
 One formula, applied to everything. No special cases anywhere in code.
@@ -210,6 +236,8 @@ last living squad member eliminated → all DBNO squadmates eliminated
 | `RecoilProfileBlueprint` | Kick, pattern, recovery |
 | `RarityBlueprint` | Damage multiplier, colour, loot weight |
 | `CharacterBlueprint` | Health, shield, hitbox definitions |
+| `ConsumableBlueprint` | Heal and shield amounts, the cap, the channel time, cancel rules |
+| `BotBlueprint` | Everything a stand-in opponent fights by ([bots.md](bots.md)) |
 
 ## 8. Test plan
 
@@ -229,6 +257,11 @@ last living squad member eliminated → all DBNO squadmates eliminated
 | Shot aggregation | Unit | Ten pellets into one target is one number; separate targets stay separate; overflow past the bucket count keeps the total honest |
 | Number life | Unit | Opaque before it fades, monotonic rise, never transparent early |
 | Feedback in the browser | Smoke | The pool is allocated up front; a shell raises one number and a chevron; both clear on time |
+| Shield ordering, in play | Smoke | A bot's shield falls to zero before its health moves |
+| Elimination | Unit | The killing blow is reported once; the dead take no further damage |
+| Respawn | Unit | Not before the authored delay; full health and the authored shield after |
+| Kill feed | Unit | Newest first, bounded, pooled, and entries expire |
+| Survival loop | Smoke | Shoot a bot down, take return fire through a shield, build cover, be eliminated, respawn |
 | DBNO | Integration (M5) | Bleed, revive, last-member wipe |
 | **No-code content test** | Manual, M3 gate | A new weapon added via one Blueprint + one mesh, zero `.ts` diff |
 
@@ -236,6 +269,6 @@ last living squad member eliminated → all DBNO squadmates eliminated
 
 | Question | Owner | Decide by |
 | --- | --- | --- |
-| Does the pickaxe damage players? Proposal: 20, no build ramp interaction | design | M3 |
+| Does the pickaxe damage players? Proposal: 20, no build ramp interaction. Until this is settled it damages neither players nor bots | design | M3 |
 | Sniper drop: simple curve or full ballistics? Leaning curve | design | M3 |
 | Should bullets penetrate a destroyed-that-frame piece, or stop? | engineering | M3 |

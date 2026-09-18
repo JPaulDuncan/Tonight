@@ -203,6 +203,11 @@ export class WorldCollision implements MotorCollision {
    * the window.
    */
   private *piecesNear(x: number, y: number, z: number): Generator<PlacedPiece> {
+    // 45 cells by 4 slots is 180 lookups, and a shot trace does this at every
+    // step along the ray. On a world with nothing built -- which is most of a
+    // trace, and all of a fresh sandbox -- the answer is known without asking.
+    if (this.structure.count === 0) return;
+
     const centre = worldToCell(x, y, z);
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {

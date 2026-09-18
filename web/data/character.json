@@ -78,6 +78,36 @@
       }
     }
   ],
+  "bots": [
+    {
+      "id": "bot.target",
+      "displayName": "Target Bot",
+      "description": "Stands there and takes it. A bot that never shoots back is engageRangeMetres 0 and retaliates false, not a separate class.",
+      "characterId": "character.default",
+      "weaponId": "weapon.pistol",
+      "startingShield": 50,
+      "engageRangeMetres": 0,
+      "reactionSeconds": 0.5,
+      "secondsBetweenShots": 1.1,
+      "aimErrorDegrees": 3,
+      "respawnSeconds": 12,
+      "retaliates": false
+    },
+    {
+      "id": "bot.skirmisher",
+      "displayName": "Skirmisher",
+      "description": "Opens fire inside 22 m and keeps shooting at anyone who hits it. Pistol rather than rifle, and one pull a second rather than a held trigger: the point is to make shields matter, not to win.",
+      "characterId": "character.default",
+      "weaponId": "weapon.pistol",
+      "startingShield": 50,
+      "engageRangeMetres": 22,
+      "reactionSeconds": 0.5,
+      "secondsBetweenShots": 1.1,
+      "aimErrorDegrees": 3,
+      "respawnSeconds": 12,
+      "retaliates": true
+    }
+  ],
   "locomotion": [
     {
       "id": "locomotion.default",
