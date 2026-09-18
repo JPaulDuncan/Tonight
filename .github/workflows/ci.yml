@@ -62,6 +62,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Seed assets are up to date
+        # The seed Blueprints are generated from tools/seed_blueprints.py. A
+        # hand-edit to a generated .asset would be silently overwritten on the
+        # next run, so the generator is the place to make the change.
+        run: python tools/seed_blueprints.py --check
+
       - name: Validate Blueprint assets
         # Cross-asset checks a single asset cannot perform: duplicate
         # identities, storm phase radius discontinuities, loot table cycles,

@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ce7adef6d43affb5f6ee9bf53f3280f, type: 3}
+  m_Name: BP_Damage_Sniper
+  m_EditorClassIdentifier: 
+  _blueprintId: f9c2eb5699db5b52713badad4bb36d83
+  _displayName: Sniper damage
+  _description: ""
+  _tags: []
+  _baseDamage: 105
+  _headshotMultiplier: 2.5
+  _structureMultiplier: 1.2
+  _falloffStartMetres: 200
+  _falloffEndMetres: 250
+  _falloffEndDamageScale: 0.9
+  _shieldPenetration: 0

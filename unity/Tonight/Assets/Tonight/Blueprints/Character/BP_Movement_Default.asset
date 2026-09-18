@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: abf7adddfaa60fe4413460d7d5402e7b, type: 3}
+  m_Name: BP_Movement_Default
+  m_EditorClassIdentifier: 
+  _blueprintId: 383021cd82e2e2e36d78bbb8c5b6e6dc
+  _displayName: Default movement
+  _description: ""
+  _tags: []
+  _walkSpeed: 4.6
+  _sprintSpeed: 7.4
+  _crouchSpeed: 2.3
+  _acceleration: 60
+  _deceleration: 45
+  _airControl: 0.35
+  _jumpHeight: 1.1
+  _gravity: -22
+  _terminalVelocity: 55
+  _fallDamageThreshold: 3.5
+  _fallDamagePerMetre: 10
+  _mantleMaxHeight: 1.6
+  _mantleSeconds: 0.4
+  _standHeight: 1.8
+  _crouchHeight: 0.9

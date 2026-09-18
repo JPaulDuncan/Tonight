@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e847e9962412fe3fbfa993bba9a1f7f3, type: 3}
+  m_Name: BP_Recoil_Medium
+  m_EditorClassIdentifier: 
+  _blueprintId: 50c184d2453d013e842a97928ba1a8be
+  _displayName: Medium recoil
+  _description: ""
+  _tags: []
+  _verticalKickDegrees: 0.6
+  _horizontalKickDegrees: 0.22
+  _pattern: []
+  _recoveryPerSecond: 8
+  _recoveryDelaySeconds: 0.12

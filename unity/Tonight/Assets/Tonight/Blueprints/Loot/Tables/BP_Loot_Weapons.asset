@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 96f0bf6f919f60acd0f474df5bca0f30, type: 3}
+  m_Name: BP_Loot_Weapons
+  m_EditorClassIdentifier: 
+  _blueprintId: 7b05edd3b1b721051ec7c9c239d940cd
+  _displayName: Weapon pool
+  _description: ""
+  _tags: []
+  _entries:
+  - _kind: 0
+    _item: {fileID: 11400000, guid: a4f7d4e263d19540eec759366b6bd404, type: 2}
+    _table: {fileID: 0}
+    _weight: 30
+    _countRange:
+      _min: 1
+      _max: 1
+    _rarityOverride: {fileID: 0}
+  - _kind: 0
+    _item: {fileID: 11400000, guid: 0196ec69e4280ea79a8b402441f26a9f, type: 2}
+    _table: {fileID: 0}
+    _weight: 24
+    _countRange:
+      _min: 1
+      _max: 1
+    _rarityOverride: {fileID: 0}
+  - _kind: 0
+    _item: {fileID: 11400000, guid: f6566a099f21fefbd67c8225c20168c0, type: 2}
+    _table: {fileID: 0}
+    _weight: 22
+    _countRange:
+      _min: 1
+      _max: 1
+    _rarityOverride: {fileID: 0}
+  - _kind: 0
+    _item: {fileID: 11400000, guid: 9e8e244d7b9a19aae8beb31c3ce47071, type: 2}
+    _table: {fileID: 0}
+    _weight: 16
+    _countRange:
+      _min: 1
+      _max: 1
+    _rarityOverride: {fileID: 0}
+  - _kind: 0
+    _item: {fileID: 11400000, guid: 5da705eb1f8aa06091c56486193c69f1, type: 2}
+    _table: {fileID: 0}
+    _weight: 8
+    _countRange:
+      _min: 1
+      _max: 1
+    _rarityOverride: {fileID: 0}
+  _rollCount:
+    _min: 1
+    _max: 1
+  _allowDuplicates: 1
+  _rarityBias: 0

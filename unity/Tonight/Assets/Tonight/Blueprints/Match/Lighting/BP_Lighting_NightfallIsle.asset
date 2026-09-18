@@ -1,0 +1,150 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5a40ed144bdc465a4feac37ae5771e0d, type: 3}
+  m_Name: BP_Lighting_NightfallIsle
+  m_EditorClassIdentifier: 
+  _blueprintId: 5b64882cb9282e0a4ceecefa98eeeb51
+  _displayName: Nightfall Isle lighting
+  _description: ""
+  _tags: []
+  _keyframesByPhase:
+  - _phaseIndex: 0
+    _sunColour: {r: 1, g: 0.76, b: 0.52, a: 1}
+    _sunIntensity: 1.1
+    _fogColour: {r: 0.55, g: 0.45, b: 0.42, a: 1}
+    _fogDensity: 0.006
+  - _phaseIndex: 1
+    _sunColour: {r: 0.7, g: 0.66, b: 0.85, a: 1}
+    _sunIntensity: 0.55
+    _fogColour: {r: 0.32, g: 0.31, b: 0.45, a: 1}
+    _fogDensity: 0.01
+  - _phaseIndex: 2
+    _sunColour: {r: 0.52, g: 0.55, b: 0.85, a: 1}
+    _sunIntensity: 0.35
+    _fogColour: {r: 0.22, g: 0.23, b: 0.38, a: 1}
+    _fogDensity: 0.013
+  - _phaseIndex: 3
+    _sunColour: {r: 0.38, g: 0.44, b: 0.78, a: 1}
+    _sunIntensity: 0.18
+    _fogColour: {r: 0.12, g: 0.14, b: 0.26, a: 1}
+    _fogDensity: 0.017
+  - _phaseIndex: 4
+    _sunColour: {r: 0.36, g: 0.42, b: 0.76, a: 1}
+    _sunIntensity: 0.16
+    _fogColour: {r: 0.1, g: 0.12, b: 0.24, a: 1}
+    _fogDensity: 0.018
+  - _phaseIndex: 5
+    _sunColour: {r: 0.48, g: 0.48, b: 0.74, a: 1}
+    _sunIntensity: 0.26
+    _fogColour: {r: 0.16, g: 0.17, b: 0.3, a: 1}
+    _fogDensity: 0.015
+  - _phaseIndex: 6
+    _sunColour: {r: 0.92, g: 0.66, b: 0.55, a: 1}
+    _sunIntensity: 0.7
+    _fogColour: {r: 0.44, g: 0.37, b: 0.4, a: 1}
+    _fogDensity: 0.009
+  - _phaseIndex: 7
+    _sunColour: {r: 1, g: 0.86, b: 0.66, a: 1}
+    _sunIntensity: 1.2
+    _fogColour: {r: 0.62, g: 0.55, b: 0.48, a: 1}
+    _fogDensity: 0.005
+  _skyGradient:
+    serializedVersion: 2
+    key0: {r: 0.35, g: 0.26, b: 0.38, a: 1}
+    key1: {r: 0.14, g: 0.15, b: 0.3, a: 1}
+    key2: {r: 0.05, g: 0.06, b: 0.14, a: 1}
+    key3: {r: 0.12, g: 0.13, b: 0.26, a: 1}
+    key4: {r: 0.52, g: 0.4, b: 0.42, a: 1}
+    key5: {r: 0.52, g: 0.4, b: 0.42, a: 1}
+    key6: {r: 0.52, g: 0.4, b: 0.42, a: 1}
+    key7: {r: 0.52, g: 0.4, b: 0.42, a: 1}
+    ctime0: 0
+    ctime1: 14418
+    ctime2: 32768
+    ctime3: 47185
+    ctime4: 65535
+    ctime5: 65535
+    ctime6: 65535
+    ctime7: 65535
+    atime0: 0
+    atime1: 65535
+    atime2: 131070
+    atime3: 196605
+    atime4: 262140
+    atime5: 327675
+    atime6: 393210
+    atime7: 458745
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 5
+    m_NumAlphaKeys: 2
+  _sunElevationCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 8
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.18
+      value: -4
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.5
+      value: -22
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.72
+      value: -10
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.88
+      value: 2
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 12
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  _minPlayerRimIntensity: 0.4

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee9932ea1cb5b8b444a1b8b831a92b44, type: 3}
+  m_Name: BP_Storm_Phase3
+  m_EditorClassIdentifier: 
+  _blueprintId: 9f214ae5e527a5038352ec68cd756b80
+  _displayName: Storm phase 3
+  _description: ""
+  _tags: []
+  _phaseIndex: 3
+  _waitSeconds: 60
+  _closeSeconds: 55
+  _startRadius: 400
+  _endRadius: 250
+  _damagePerSecond: 5
+  _centreBiasToPlayers: 0.3
+  _maxRotationDistance: -1
