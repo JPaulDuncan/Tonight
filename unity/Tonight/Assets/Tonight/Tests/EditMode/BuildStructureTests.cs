@@ -24,7 +24,7 @@ namespace Tonight.Tests.EditMode
             Cell = new GridCell(x, y, z),
             Slot = slot,
             OwnerId = 1,
-            Health = 90f,
+            DamageTaken = 0f,
         };
 
         [Test]

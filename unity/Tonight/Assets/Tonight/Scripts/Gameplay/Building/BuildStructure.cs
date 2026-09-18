@@ -16,7 +16,17 @@ namespace Tonight.Gameplay.Building
         /// <summary>Tick at which the piece was placed, for the build-HP ramp.</summary>
         public int PlacedTick;
 
-        public float Health;
+        /// <summary>
+        /// Accumulated damage, rather than a current-HP value.
+        /// </summary>
+        /// <remarks>
+        /// Storing damage instead of health is what lets the build-HP ramp keep
+        /// running after a piece is shot: a wall that survives a burst goes on
+        /// maturing toward full health rather than being frozen at whatever it
+        /// had left. Current health is
+        /// <c>material.HealthAtAge(age) - DamageTaken</c>.
+        /// </remarks>
+        public float DamageTaken;
 
         /// <summary>
         /// Hops back to ground. 0 means the piece touches terrain.
@@ -134,6 +144,28 @@ namespace Tonight.Gameplay.Building
             // need re-evaluating too. Without this, a piece placed beneath an
             // unsupported stack would not rescue it.
             RefreshNeighbourhood(key);
+            return true;
+        }
+
+        /// <summary>
+        /// Overwrite an existing piece in place, keeping its cached support
+        /// distance. Used for damage and edits, which change a piece without
+        /// changing the structure's topology.
+        /// </summary>
+        public bool Replace(PlacedPiece piece)
+        {
+            PieceKey key = MakeKey(piece.Cell, piece.Slot);
+            if (!_pieces.TryGetValue(key, out PlacedPiece existing))
+            {
+                return false;
+            }
+
+            piece.Cell = key.Cell;
+            piece.Slot = key.Slot;
+            // Support is a property of the topology, not of the piece's data, so
+            // an edit or a damage event must not silently reset it.
+            piece.SupportDistance = existing.SupportDistance;
+            _pieces[key] = piece;
             return true;
         }
 
