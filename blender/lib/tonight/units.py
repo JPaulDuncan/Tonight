@@ -43,10 +43,16 @@ CHARACTER_HEIGHT = 1.8
 # Axis conversion
 # --------------------------------------------------------------------------
 
-#: Blender is Z-up, right-handed. Unity is Y-up, left-handed. Export always
-#: goes through ``tonight.export.export_fbx``, which applies this; calling
-#: ``bpy.ops.export_scene.fbx`` directly is prohibited precisely because it is
-#: easy to get this wrong in a way nobody notices until animation.
+#: Blender is Z-up right-handed; three.js and glTF are Y-up right-handed, so the
+#: conversion is a single axis change with no handedness flip. (The old Unity
+#: target was Y-up *left*-handed, which is why this used to be fiddlier.)
+#: Export always goes through ``tonight.export``; calling ``bpy.ops.export_scene.*``
+#: directly is prohibited precisely because it is easy to get this wrong in a
+#: way nobody notices until much later.
+GLTF_Y_UP = True
+
+#: Retained for the FBX path, which exists only for interoperability with other
+#: tools. The web client consumes glTF.
 FBX_AXIS_FORWARD = "-Z"
 FBX_AXIS_UP = "Y"
 

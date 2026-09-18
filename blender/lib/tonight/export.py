@@ -17,8 +17,8 @@ from tonight.mesh import MeshData
 #: regenerated from the Python that is the real source of truth (ADR-0004).
 EXPORT_ROOT = Path("blender/exports")
 
-#: Where Unity picks the meshes up.
-UNITY_ART_ROOT = Path("unity/Tonight/Assets/Tonight/Art")
+#: Where the web client picks the meshes up.
+WEB_ART_ROOT = Path("web/public/art")
 
 #: Subfolder per asset family, so the Unity importer can apply different
 #: settings per family without matching on names.
@@ -67,10 +67,14 @@ def category_for(asset_name: str) -> str:
     return category
 
 
-def export_path(asset_name: str, root: Path = EXPORT_ROOT) -> Path:
-    """Where an asset's FBX belongs."""
+def export_path(asset_name: str, root: Path = EXPORT_ROOT, suffix: str = ".glb") -> Path:
+    """Where an asset's exported mesh belongs.
+
+    Defaults to ``.glb``: the three.js client loads glTF natively, so that is
+    the pipeline's primary format.
+    """
     category = category_for(asset_name)
-    return root / CATEGORY_FOLDERS[category] / f"{asset_name}.fbx"
+    return root / CATEGORY_FOLDERS[category] / f"{asset_name}{suffix}"
 
 
 def check_before_export(mesh: MeshData) -> list[str]:

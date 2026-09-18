@@ -30,9 +30,6 @@ jobs:
         # testable on every push rather than only when someone opens Blender.
         run: python -m pytest blender/tests -q
 
-      - name: Tooling tests
-        run: python -m pytest tools/tests -q
-
       - name: Map constraints
         # GDD section 8's constraints, checked rather than judged by eye. This
         # is the M5 exit criterion made executable.
@@ -78,28 +75,6 @@ jobs:
           fi
           echo "Manifest matches the generators."
 
-  blueprints:
-    name: Blueprint validation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Seed assets are up to date
-        # The seed Blueprints are generated from tools/seed_blueprints.py. A
-        # hand-edit to a generated .asset would be silently overwritten on the
-        # next run, so the generator is the place to make the change.
-        run: python tools/seed_blueprints.py --check
-
-      - name: Validate Blueprint assets
-        # Cross-asset checks a single asset cannot perform: duplicate
-        # identities, storm phase radius discontinuities, loot table cycles,
-        # orphaned .meta files.
-        run: python tools/validate_blueprints.py
-
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-latest
@@ -120,18 +95,6 @@ jobs:
           fi
           echo "No exported binaries in git."
 
-      - name: No orphaned Unity meta files
-        run: |
-          status=0
-          while IFS= read -r meta; do
-            asset="${meta%.meta}"
-            if [ ! -e "$asset" ]; then
-              echo "::error file=$meta::Orphaned .meta with no asset"
-              status=1
-            fi
-          done < <(git ls-files 'unity/**/*.meta')
-          exit $status
-
       - name: Documented systems have specs
         # A system whose spec went missing is a system nobody can review.
         run: |
@@ -145,29 +108,48 @@ jobs:
           done
           exit $status
 
-  # Unity EditMode tests need a licensed runner, which a public fork cannot
-  # provide. The job is defined so the wiring is reviewable and is enabled the
-  # moment UNITY_LICENSE is available; ADR-0005 rule 5's insistence that
-  # nothing REQUIRE a GUI is what keeps the jobs above meaningful without it.
-  unity-tests:
-    name: Unity EditMode tests
+  web:
+    name: Web client
     runs-on: ubuntu-latest
-    if: ${{ false }}
+    defaults:
+      run:
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      - uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: unity/Tonight/Library
-          key: Library-${{ hashFiles('unity/Tonight/Packages/manifest.json') }}
-          restore-keys: Library-
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
-      - uses: game-ci/unity-test-runner@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Simulation tests
+        # These run in Node with no DOM. If a test needs a browser, the code
+        # under test is in the wrong layer.
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Browser smoke test
+        # Boots the built game in headless Chromium, walks, harvests and builds,
+        # then asserts on the HUD. Catches the class of bug a unit test cannot:
+        # the preview and the placement disagreeing, a shader failing to
+        # compile, an uncaught exception at boot.
+        run: |
+          npx playwright install --with-deps chromium
+          npx vite preview --port 4180 --strictPort &
+          npx wait-on http://localhost:4180/ --timeout 60000
+          node tools/smoke.mjs http://localhost:4180/ /tmp/tonight.png
+
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          projectPath: unity/Tonight
-          testMode: EditMode
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          name: sandbox-screenshot
+          path: /tmp/tonight.png
+          if-no-files-found: ignore

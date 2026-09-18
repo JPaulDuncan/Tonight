@@ -5,7 +5,7 @@
     {
       "name": "SM_Build_Cone_Metal",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Cone_Metal.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Cone_Metal.glb",
       "vertex_count": 13,
       "triangle_count": 18,
       "size_metres": [
@@ -18,7 +18,7 @@
     {
       "name": "SM_Build_Cone_Stone",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Cone_Stone.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Cone_Stone.glb",
       "vertex_count": 13,
       "triangle_count": 18,
       "size_metres": [
@@ -31,7 +31,7 @@
     {
       "name": "SM_Build_Cone_Wood",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Cone_Wood.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Cone_Wood.glb",
       "vertex_count": 13,
       "triangle_count": 18,
       "size_metres": [
@@ -44,7 +44,7 @@
     {
       "name": "SM_Build_Floor_Metal",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Floor_Metal.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Floor_Metal.glb",
       "vertex_count": 24,
       "triangle_count": 36,
       "size_metres": [
@@ -57,7 +57,7 @@
     {
       "name": "SM_Build_Floor_Stone",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Floor_Stone.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Floor_Stone.glb",
       "vertex_count": 32,
       "triangle_count": 48,
       "size_metres": [
@@ -70,7 +70,7 @@
     {
       "name": "SM_Build_Floor_Wood",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Floor_Wood.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Floor_Wood.glb",
       "vertex_count": 40,
       "triangle_count": 60,
       "size_metres": [
@@ -83,7 +83,7 @@
     {
       "name": "SM_Build_Ramp_Metal",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Ramp_Metal.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Ramp_Metal.glb",
       "vertex_count": 30,
       "triangle_count": 44,
       "size_metres": [
@@ -96,7 +96,7 @@
     {
       "name": "SM_Build_Ramp_Stone",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Ramp_Stone.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Ramp_Stone.glb",
       "vertex_count": 38,
       "triangle_count": 56,
       "size_metres": [
@@ -109,7 +109,7 @@
     {
       "name": "SM_Build_Ramp_Wood",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Ramp_Wood.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Ramp_Wood.glb",
       "vertex_count": 46,
       "triangle_count": 68,
       "size_metres": [
@@ -122,7 +122,7 @@
     {
       "name": "SM_Build_Wall_Metal",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Metal.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Metal.glb",
       "vertex_count": 40,
       "triangle_count": 60,
       "size_metres": [
@@ -135,7 +135,7 @@
     {
       "name": "SM_Build_Wall_Metal_Doorway",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Metal_Doorway.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Metal_Doorway.glb",
       "vertex_count": 56,
       "triangle_count": 84,
       "size_metres": [
@@ -148,7 +148,7 @@
     {
       "name": "SM_Build_Wall_Metal_Window",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Metal_Window.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Metal_Window.glb",
       "vertex_count": 64,
       "triangle_count": 96,
       "size_metres": [
@@ -161,7 +161,7 @@
     {
       "name": "SM_Build_Wall_Stone",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Stone.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Stone.glb",
       "vertex_count": 80,
       "triangle_count": 120,
       "size_metres": [
@@ -174,7 +174,7 @@
     {
       "name": "SM_Build_Wall_Stone_Doorway",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Stone_Doorway.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Stone_Doorway.glb",
       "vertex_count": 56,
       "triangle_count": 84,
       "size_metres": [
@@ -187,7 +187,7 @@
     {
       "name": "SM_Build_Wall_Stone_Window",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Stone_Window.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Stone_Window.glb",
       "vertex_count": 64,
       "triangle_count": 96,
       "size_metres": [
@@ -200,7 +200,7 @@
     {
       "name": "SM_Build_Wall_Wood",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Wood.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Wood.glb",
       "vertex_count": 136,
       "triangle_count": 204,
       "size_metres": [
@@ -213,7 +213,7 @@
     {
       "name": "SM_Build_Wall_Wood_Doorway",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Wood_Doorway.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Wood_Doorway.glb",
       "vertex_count": 56,
       "triangle_count": 84,
       "size_metres": [
@@ -226,7 +226,7 @@
     {
       "name": "SM_Build_Wall_Wood_Window",
       "category": "build",
-      "relative_path": "blender/exports/Build/SM_Build_Wall_Wood_Window.fbx",
+      "relative_path": "blender/exports/Build/SM_Build_Wall_Wood_Window.glb",
       "vertex_count": 64,
       "triangle_count": 96,
       "size_metres": [
@@ -239,7 +239,7 @@
     {
       "name": "SM_Harvest_Rock_00",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Rock_00.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Rock_00.glb",
       "vertex_count": 32,
       "triangle_count": 48,
       "size_metres": [
@@ -252,7 +252,7 @@
     {
       "name": "SM_Harvest_Rock_01",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Rock_01.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Rock_01.glb",
       "vertex_count": 24,
       "triangle_count": 36,
       "size_metres": [
@@ -265,7 +265,7 @@
     {
       "name": "SM_Harvest_Rock_02",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Rock_02.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Rock_02.glb",
       "vertex_count": 32,
       "triangle_count": 48,
       "size_metres": [
@@ -278,7 +278,7 @@
     {
       "name": "SM_Harvest_Tree_00",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Tree_00.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Tree_00.glb",
       "vertex_count": 34,
       "triangle_count": 48,
       "size_metres": [
@@ -291,7 +291,7 @@
     {
       "name": "SM_Harvest_Tree_01",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Tree_01.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Tree_01.glb",
       "vertex_count": 34,
       "triangle_count": 48,
       "size_metres": [
@@ -304,7 +304,7 @@
     {
       "name": "SM_Harvest_Tree_02",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Tree_02.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Tree_02.glb",
       "vertex_count": 34,
       "triangle_count": 48,
       "size_metres": [
@@ -317,7 +317,7 @@
     {
       "name": "SM_Harvest_Vehicle_00",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Vehicle_00.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Vehicle_00.glb",
       "vertex_count": 88,
       "triangle_count": 152,
       "size_metres": [
@@ -330,7 +330,7 @@
     {
       "name": "SM_Harvest_Vehicle_01",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Vehicle_01.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Vehicle_01.glb",
       "vertex_count": 88,
       "triangle_count": 152,
       "size_metres": [
@@ -343,7 +343,7 @@
     {
       "name": "SM_Harvest_Vehicle_02",
       "category": "harvest",
-      "relative_path": "blender/exports/Harvestables/SM_Harvest_Vehicle_02.fbx",
+      "relative_path": "blender/exports/Harvestables/SM_Harvest_Vehicle_02.glb",
       "vertex_count": 88,
       "triangle_count": 152,
       "size_metres": [
@@ -356,7 +356,7 @@
     {
       "name": "SM_Terrain_TestIsland",
       "category": "terrain",
-      "relative_path": "blender/exports/Terrain/SM_Terrain_TestIsland.fbx",
+      "relative_path": "blender/exports/Terrain/SM_Terrain_TestIsland.glb",
       "vertex_count": 10201,
       "triangle_count": 20000,
       "size_metres": [
@@ -369,7 +369,7 @@
     {
       "name": "SM_Tool_Pickaxe",
       "category": "tool",
-      "relative_path": "blender/exports/Weapons/SM_Tool_Pickaxe.fbx",
+      "relative_path": "blender/exports/Weapons/SM_Tool_Pickaxe.glb",
       "vertex_count": 24,
       "triangle_count": 36,
       "size_metres": [
@@ -382,7 +382,7 @@
     {
       "name": "SM_Weapon_AssaultRifle",
       "category": "weapon",
-      "relative_path": "blender/exports/Weapons/SM_Weapon_AssaultRifle.fbx",
+      "relative_path": "blender/exports/Weapons/SM_Weapon_AssaultRifle.glb",
       "vertex_count": 58,
       "triangle_count": 92,
       "size_metres": [
@@ -395,7 +395,7 @@
     {
       "name": "SM_Weapon_Pistol",
       "category": "weapon",
-      "relative_path": "blender/exports/Weapons/SM_Weapon_Pistol.fbx",
+      "relative_path": "blender/exports/Weapons/SM_Weapon_Pistol.glb",
       "vertex_count": 50,
       "triangle_count": 80,
       "size_metres": [
@@ -408,7 +408,7 @@
     {
       "name": "SM_Weapon_Shotgun",
       "category": "weapon",
-      "relative_path": "blender/exports/Weapons/SM_Weapon_Shotgun.fbx",
+      "relative_path": "blender/exports/Weapons/SM_Weapon_Shotgun.glb",
       "vertex_count": 50,
       "triangle_count": 80,
       "size_metres": [
@@ -421,7 +421,7 @@
     {
       "name": "SM_Weapon_Smg",
       "category": "weapon",
-      "relative_path": "blender/exports/Weapons/SM_Weapon_Smg.fbx",
+      "relative_path": "blender/exports/Weapons/SM_Weapon_Smg.glb",
       "vertex_count": 50,
       "triangle_count": 80,
       "size_metres": [
@@ -434,7 +434,7 @@
     {
       "name": "SM_Weapon_Sniper",
       "category": "weapon",
-      "relative_path": "blender/exports/Weapons/SM_Weapon_Sniper.fbx",
+      "relative_path": "blender/exports/Weapons/SM_Weapon_Sniper.glb",
       "vertex_count": 68,
       "triangle_count": 112,
       "size_metres": [

@@ -78,13 +78,44 @@ def create_object(mesh: MeshData):
     return obj
 
 
-def export_fbx(obj, destination: Path) -> Path:
-    """Export one object to FBX with the project's axis and scale settings.
+def export_gltf(obj, destination: Path) -> Path:
+    """Export one object to glTF for the three.js client.
 
-    **Always export through this function.** Calling
-    ``bpy.ops.export_scene.fbx`` directly is prohibited because the axis
-    conversion is easy to get wrong in a way that looks fine in the viewport and
-    only surfaces later as rotated props or broken animation.
+    **Always export through this function.**
+
+    glTF is Y-up right-handed and three.js loads it natively, so Blender's
+    exporter handles the single axis change and no handedness flip is involved.
+    That is simpler than the old Unity target, which was Y-up *left*-handed --
+    but it is still the kind of setting that looks fine in the viewport and only
+    surfaces later as rotated props, so it lives in exactly one place.
+    """
+    require_bpy()
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+    bpy.ops.export_scene.gltf(
+        filepath=str(destination.with_suffix("")),
+        export_format="GLB",
+        use_selection=True,
+        export_yup=True,
+        export_apply=True,
+        export_texcoords=True,
+        export_normals=True,
+        export_materials="EXPORT",
+    )
+
+    return destination
+
+
+def export_fbx(obj, destination: Path) -> Path:
+    """Export one object to FBX.
+
+    Retained for interoperability with other tools. The three.js client consumes
+    glTF -- see :func:`export_gltf`.
     """
     require_bpy()
 
