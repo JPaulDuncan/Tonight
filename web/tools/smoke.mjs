@@ -37,15 +37,12 @@ async function clickHere() {
 const survival = () => page.evaluate(() => window.__tonight?.describeSurvival?.());
 const avatarState = () => page.evaluate(() => window.__tonight?.describeAvatar?.());
 
-/** Turn until the crosshair is on a bot, using the yaw the game reports. */
-async function faceBot(index) {
+/** Turn until the crosshair is on a world point, using the yaw the game reports. */
+async function facePoint(x, z) {
   for (let attempt = 0; attempt < 14; attempt++) {
-    const [state, me] = [await survival(), await avatarState()];
-    const bot = state?.bots?.[index];
-    if (!bot || !me) return false;
-    const want = (Math.atan2(
-      bot.position[0] - me.position[0], bot.position[2] - me.position[2],
-    ) * 180) / Math.PI;
+    const me = await avatarState();
+    if (!me) return false;
+    const want = (Math.atan2(x - me.position[0], z - me.position[2]) * 180) / Math.PI;
     let delta = want - me.yaw;
     while (delta > 180) delta -= 360;
     while (delta < -180) delta += 360;
@@ -54,6 +51,15 @@ async function faceBot(index) {
   }
   return false;
 }
+
+async function faceBot(index) {
+  const bot = (await survival())?.bots?.[index];
+  if (!bot) return false;
+  return facePoint(bot.position[0], bot.position[2]);
+}
+
+const stormState = () => page.evaluate(() => window.__tonight?.describeStorm?.());
+const feedbackState = () => page.evaluate(() => window.__tonight?.describeFeedback?.());
 
 page.on("console", (m) => { logs.push(`${m.type()}: ${m.text()}`); });
 page.on("pageerror", (e) => errors.push(String(e)));
@@ -77,6 +83,17 @@ const info = await page.evaluate(() => {
     bootError: Boolean(document.querySelector(".boot-error")),
   };
 });
+
+// Stop the clock for the phases that are not about it. Everything below
+// assumes a world that is not closing on the player: a storm that reached the
+// spawn midway through would turn "did the bot's shot land" into "or was that
+// the storm". The storm gets its own phase at the end, which starts it again.
+await page.keyboard.press("KeyP");
+await page.waitForTimeout(150);
+const stormAtBoot = await page.evaluate(() => window.__tonight?.describeStorm?.());
+console.log("storm at boot:", JSON.stringify(stormAtBoot));
+if (!stormAtBoot) errors.push("no storm state to read");
+else if (!stormAtBoot.paused) errors.push("P did not pause the storm");
 
 // Drive it: walk, harvest, then build a box by turning between placements.
 await page.mouse.move(640, 360);
@@ -764,6 +781,122 @@ if (!eliminated) {
   if (respawned.player.shield !== 0) errors.push("respawned with a shield: it is looted, not granted");
   if (Math.hypot(where.position[0], where.position[2]) > 1) {
     errors.push("respawned somewhere other than the spawn point");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The storm.
+//
+// The circle geometry and the night clock are arithmetic and are covered in
+// tests/storm.test.ts. What only a browser shows is the wiring: that the clock
+// actually advances, that standing outside costs health once a second, that
+// walking back in stops it, and that the sky moves while it all happens.
+// ---------------------------------------------------------------------------
+
+await page.keyboard.press("Backspace");        // clean world, full health
+await page.waitForTimeout(400);
+await ensureBuildMode(false);
+
+const stillPaused = await stormState();
+await page.waitForTimeout(1200);
+const laterPaused = await stormState();
+if (Math.abs(laterPaused.secondsRemaining - stillPaused.secondsRemaining) > 0.05) {
+  errors.push("the paused storm kept counting down");
+}
+
+await page.keyboard.press("KeyP");             // and off we go
+await page.waitForTimeout(1500);
+const running = await stormState();
+console.log("storm running:", JSON.stringify({
+  phase: running.phase, state: running.closing ? "closing" : "waiting",
+  radius: running.radius, left: running.secondsRemaining, sky: running.sky,
+}));
+
+if (running.paused) errors.push("P did not restart the storm");
+if (!(running.secondsRemaining < laterPaused.secondsRemaining)) {
+  errors.push("the storm is running but its countdown is not");
+}
+if (running.nextRadius >= running.radius) {
+  errors.push(`the next circle (${running.nextRadius} m) is not smaller than this one`);
+}
+// The visibility floor is a constant of the Blueprint, never interpolated:
+// storm.md section 3 forbids darkness from becoming a stealth mechanic.
+if (!(running.sky.rimIntensity > 0)) errors.push("the visibility floor is gone");
+
+// --- walk into it ----------------------------------------------------------
+const safeCentre = running.centre;
+// Straight out, away from the middle: any direction leaves the circle, and a
+// fixed one keeps the walk repeatable.
+await facePoint(safeCentre[0] + 400, safeCentre[1]);
+await page.keyboard.down("ShiftLeft");
+await page.keyboard.down("KeyW");
+let escaped = null;
+for (let i = 0; i < 18; i++) {
+  await page.waitForTimeout(1200);
+  const now = await stormState();
+  if (now.outside) { escaped = now; break; }
+}
+await page.keyboard.up("KeyW");
+await page.keyboard.up("ShiftLeft");
+await page.waitForTimeout(200);
+
+if (!escaped) {
+  errors.push("sprinted for twenty seconds and never left the circle");
+} else {
+  console.log(`outside at ${escaped.distanceFromCentre} m, radius ${escaped.radius} m`);
+  if (escaped.distanceFromCentre <= escaped.radius) {
+    errors.push("reported outside the circle while inside it");
+  }
+
+  const before = await stormState();
+  let sawStormNumber = false;
+  for (let i = 0; i < 8; i++) {
+    await page.waitForTimeout(400);
+    const shown = await feedbackState();
+    if (shown.visible.some((n) => n.cls.includes("dmg-storm"))) sawStormNumber = true;
+  }
+  const after = await stormState();
+  const dealt = after.damageTaken - before.damageTaken;
+  console.log(`three seconds outside cost ${dealt.toFixed(1)} health`);
+
+  // One point a second in phase one: storm.md section 1 ticks per second, not
+  // per frame, so this is a count of seconds rather than of frames.
+  if (dealt <= 0) errors.push("standing outside the storm cost nothing");
+  if (dealt > 12) errors.push(`${dealt} damage in three seconds - is it ticking per frame?`);
+  if (!sawStormNumber) errors.push("storm damage showed no number in its own colour");
+
+  const hurt = await survival();
+  if (hurt.player.shield > 0) {
+    errors.push("the storm went through a shield instead of ignoring it");
+  }
+
+  // --- and back out of it --------------------------------------------------
+  await facePoint(safeCentre[0], safeCentre[1]);
+  await page.keyboard.down("ShiftLeft");
+  await page.keyboard.down("KeyW");
+  for (let i = 0; i < 18; i++) {
+    await page.waitForTimeout(1000);
+    if (!(await stormState()).outside) break;
+  }
+  await page.keyboard.up("KeyW");
+  await page.keyboard.up("ShiftLeft");
+
+  const safe = await stormState();
+  await page.waitForTimeout(2500);
+  const safeLater = await stormState();
+  console.log("back inside:", JSON.stringify({
+    outside: safeLater.outside, took: safeLater.damageTaken - safe.damageTaken,
+  }));
+
+  if (safeLater.outside) errors.push("could not get back inside the circle");
+  else if (safeLater.damageTaken > safe.damageTaken) {
+    errors.push("the storm kept damaging the player back inside the circle");
+  }
+
+  // The night moved while all that happened.
+  console.log(`sun ${running.sky.sunElevation} -> ${safeLater.sky.sunElevation} degrees`);
+  if (!(safeLater.sky.sunElevation < running.sky.sunElevation)) {
+    errors.push("the night clock did not advance while the storm ran");
   }
 }
 

@@ -491,25 +491,16 @@ export function validateLibrary(library: BlueprintLibrary): Finding[] {
   }
 
   // --- storm phases -------------------------------------------------------
-  const phases = [...library.stormPhases].sort((a, b) => a.phaseIndex - b.phaseIndex);
-  const phaseIndices = new Set<number>();
-  for (const p of phases) {
+  //
+  // Per phase only. Continuity and index uniqueness are properties of a *phase
+  // list*, not of the library: storm.md section 5 promises that a faster mode
+  // and a slower one are two assets, and checking those two rules across every
+  // phase in the library made that impossible -- a second set restarting at
+  // phaseIndex 0 read as a duplicate, and its first radius as a teleport.
+  for (const p of library.stormPhases) {
     if (p.endRadius > p.startRadius) error("endRadius must not exceed startRadius.", p.id);
     if (p.startRadius <= 0) error("startRadius must be positive.", p.id);
     if (p.closeSeconds <= 0) error("closeSeconds must be positive.", p.id);
-    if (phaseIndices.has(p.phaseIndex)) error(`Duplicate phaseIndex ${p.phaseIndex}.`, p.id);
-    phaseIndices.add(p.phaseIndex);
-  }
-  for (let i = 1; i < phases.length; i++) {
-    const previous = phases[i - 1]!;
-    const current = phases[i]!;
-    if (Math.abs(previous.endRadius - current.startRadius) > 0.01) {
-      error(
-        `Phase ${current.phaseIndex} starts at radius ${current.startRadius} m but phase ` +
-          `${previous.phaseIndex} ended at ${previous.endRadius} m. The circle would teleport.`,
-        current.id,
-      );
-    }
   }
 
   // --- lighting -----------------------------------------------------------
@@ -532,6 +523,36 @@ export function validateLibrary(library: BlueprintLibrary): Finding[] {
       error("maxPlayers must divide evenly by squadSize, or the last squad is short.", r.id);
     }
     if (r.stormPhaseIds.length === 0) error("Match rules need at least one storm phase.", r.id);
+
+    // This mode's own phases, in the order it runs them.
+    const ordered = r.stormPhaseIds
+      .map((id) => library.stormPhases.find((p) => p.id === id))
+      .filter((p): p is StormPhaseBlueprint => p !== undefined);
+
+    const seenPhaseIndex = new Map<number, string>();
+    for (const phase of ordered) {
+      const claimed = seenPhaseIndex.get(phase.phaseIndex);
+      if (claimed) {
+        error(
+          `Phases '${claimed}' and '${phase.id}' both claim phaseIndex ${phase.phaseIndex} ` +
+            "in this mode, so the lighting keyframe for it is ambiguous.",
+          r.id,
+        );
+      }
+      seenPhaseIndex.set(phase.phaseIndex, phase.id);
+    }
+
+    for (let i = 1; i < ordered.length; i++) {
+      const previous = ordered[i - 1]!;
+      const current = ordered[i]!;
+      if (Math.abs(previous.endRadius - current.startRadius) > 0.01) {
+        error(
+          `Phase '${current.id}' starts at radius ${current.startRadius} m but '${previous.id}' ` +
+            `ended at ${previous.endRadius} m. The circle would teleport.`,
+          r.id,
+        );
+      }
+    }
     if (r.allowDbno && r.squadSize === 1) {
       warn("DBNO is enabled on a solo mode. Legal, but nobody can revive anyone.", r.id);
     }
@@ -539,9 +560,7 @@ export function validateLibrary(library: BlueprintLibrary): Finding[] {
     for (const id of r.stormPhaseIds) requireRef(id, r.id, "stormPhaseIds");
     for (const id of r.startingLoadoutIds) requireRef(id, r.id, "startingLoadoutIds");
 
-    const totalSeconds = r.stormPhaseIds
-      .map((id) => library.stormPhases.find((p) => p.id === id))
-      .reduce((sum, p) => sum + (p ? p.waitSeconds + p.closeSeconds : 0), 0);
+    const totalSeconds = ordered.reduce((sum, p) => sum + p.waitSeconds + p.closeSeconds, 0);
     const minutes = totalSeconds / 60;
     if (minutes < 6 || minutes > 22) {
       warn(
@@ -553,9 +572,8 @@ export function validateLibrary(library: BlueprintLibrary): Finding[] {
     // Lighting must cover every phase, or the night clock stalls partway.
     const lighting = library.lighting.find((l) => l.id === r.lightingId);
     if (lighting) {
-      for (const phaseId of r.stormPhaseIds) {
-        const phase = library.stormPhases.find((p) => p.id === phaseId);
-        if (phase && !lighting.keyframesByPhase.some((k) => k.phaseIndex === phase.phaseIndex)) {
+      for (const phase of ordered) {
+        if (!lighting.keyframesByPhase.some((k) => k.phaseIndex === phase.phaseIndex)) {
           error(`No lighting keyframe for storm phase ${phase.phaseIndex}.`, r.lightingId);
         }
       }

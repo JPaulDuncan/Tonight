@@ -21,7 +21,7 @@ hardcoded content — and keeps the vocabulary.
 
 ```bash
 cd web && npm install
-npm run verify        # typecheck + 288 tests + production build
+npm run verify        # typecheck + 313 tests + production build
 npm run dev           # the playable sandbox
 
 cd ..

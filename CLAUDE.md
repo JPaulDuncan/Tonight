@@ -55,7 +55,7 @@ See `docs/blueprints/README.md` for the full contract.
 ```bash
 cd web && npm install
 npm run dev        # the playable sandbox at localhost:5173
-npm test           # 288 simulation tests, under two seconds
+npm test           # 313 simulation tests, under two seconds
 npm run art        # regenerate the meshes the client loads (no Blender needed)
 npm run verify     # typecheck + tests + production build
 npm run smoke      # drive the built game in a real browser and screenshot it

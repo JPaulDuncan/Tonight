@@ -55,12 +55,17 @@ describe("the rescope to 30 players", () => {
   });
 
   it("keeps storm radii continuous so the circle never teleports", () => {
-    const phases = [...library.stormPhases].sort((a, b) => a.phaseIndex - b.phaseIndex);
-    for (let i = 1; i < phases.length; i++) {
-      expect(phases[i]!.startRadius).toBe(phases[i - 1]!.endRadius);
+    // Per mode, not across the library: the sandbox runs its own phase list,
+    // and its first radius is not a discontinuity in Solo's -- it is a
+    // different storm. Every mode's own list still has to be continuous.
+    for (const rules of library.matchRules) {
+      const phases = rules.stormPhaseIds.map((id) => blueprints().stormPhase(id));
+      for (let i = 1; i < phases.length; i++) {
+        expect(phases[i]!.startRadius).toBe(phases[i - 1]!.endRadius);
+      }
+      expect(phases.at(-1)!.endRadius).toBe(0);
     }
-    expect(phases[0]!.startRadius).toBe(800);
-    expect(phases.at(-1)!.endRadius).toBe(0);
+    expect(blueprints().stormPhase("storm.phase0").startRadius).toBe(800);
   });
 
   it("starts the storm wide enough to cover the map", () => {

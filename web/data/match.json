@@ -1,67 +1,347 @@
 {
   "stormPhases": [
-    { "id": "storm.phase0", "displayName": "Storm phase 0", "phaseIndex": 0,
-      "waitSeconds": 120, "closeSeconds": 90, "startRadius": 800, "endRadius": 520,
-      "damagePerSecond": 1, "centreBiasToPlayers": 0.15, "maxRotationDistance": -1 },
-    { "id": "storm.phase1", "displayName": "Storm phase 1", "phaseIndex": 1,
-      "waitSeconds": 70, "closeSeconds": 65, "startRadius": 520, "endRadius": 340,
-      "damagePerSecond": 1, "centreBiasToPlayers": 0.2, "maxRotationDistance": -1 },
-    { "id": "storm.phase2", "displayName": "Storm phase 2", "phaseIndex": 2,
-      "waitSeconds": 55, "closeSeconds": 50, "startRadius": 340, "endRadius": 210,
-      "damagePerSecond": 2, "centreBiasToPlayers": 0.28, "maxRotationDistance": -1 },
-    { "id": "storm.phase3", "displayName": "Storm phase 3", "phaseIndex": 3,
-      "waitSeconds": 40, "closeSeconds": 40, "startRadius": 210, "endRadius": 120,
-      "damagePerSecond": 5, "centreBiasToPlayers": 0.34, "maxRotationDistance": -1 },
-    { "id": "storm.phase4", "displayName": "Storm phase 4", "phaseIndex": 4,
-      "waitSeconds": 30, "closeSeconds": 30, "startRadius": 120, "endRadius": 60,
-      "damagePerSecond": 7, "centreBiasToPlayers": 0.4, "maxRotationDistance": -1 },
-    { "id": "storm.phase5", "displayName": "Storm phase 5", "phaseIndex": 5,
-      "waitSeconds": 25, "closeSeconds": 25, "startRadius": 60, "endRadius": 25,
-      "damagePerSecond": 10, "centreBiasToPlayers": 0.46, "maxRotationDistance": -1 },
-    { "id": "storm.phase6", "displayName": "Storm phase 6", "phaseIndex": 6,
-      "waitSeconds": 20, "closeSeconds": 30, "startRadius": 25, "endRadius": 0,
-      "damagePerSecond": 10, "centreBiasToPlayers": 0.52, "maxRotationDistance": -1 }
+    {
+      "id": "storm.phase0",
+      "displayName": "Storm phase 0",
+      "phaseIndex": 0,
+      "waitSeconds": 120,
+      "closeSeconds": 90,
+      "startRadius": 800,
+      "endRadius": 520,
+      "damagePerSecond": 1,
+      "centreBiasToPlayers": 0.15,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.phase1",
+      "displayName": "Storm phase 1",
+      "phaseIndex": 1,
+      "waitSeconds": 70,
+      "closeSeconds": 65,
+      "startRadius": 520,
+      "endRadius": 340,
+      "damagePerSecond": 1,
+      "centreBiasToPlayers": 0.2,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.phase2",
+      "displayName": "Storm phase 2",
+      "phaseIndex": 2,
+      "waitSeconds": 55,
+      "closeSeconds": 50,
+      "startRadius": 340,
+      "endRadius": 210,
+      "damagePerSecond": 2,
+      "centreBiasToPlayers": 0.28,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.phase3",
+      "displayName": "Storm phase 3",
+      "phaseIndex": 3,
+      "waitSeconds": 40,
+      "closeSeconds": 40,
+      "startRadius": 210,
+      "endRadius": 120,
+      "damagePerSecond": 5,
+      "centreBiasToPlayers": 0.34,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.phase4",
+      "displayName": "Storm phase 4",
+      "phaseIndex": 4,
+      "waitSeconds": 30,
+      "closeSeconds": 30,
+      "startRadius": 120,
+      "endRadius": 60,
+      "damagePerSecond": 7,
+      "centreBiasToPlayers": 0.4,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.phase5",
+      "displayName": "Storm phase 5",
+      "phaseIndex": 5,
+      "waitSeconds": 25,
+      "closeSeconds": 25,
+      "startRadius": 60,
+      "endRadius": 25,
+      "damagePerSecond": 10,
+      "centreBiasToPlayers": 0.46,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.phase6",
+      "displayName": "Storm phase 6",
+      "phaseIndex": 6,
+      "waitSeconds": 20,
+      "closeSeconds": 30,
+      "startRadius": 25,
+      "endRadius": 0,
+      "damagePerSecond": 10,
+      "centreBiasToPlayers": 0.52,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.sandbox0",
+      "displayName": "Sandbox phase 0",
+      "phaseIndex": 0,
+      "waitSeconds": 45,
+      "closeSeconds": 45,
+      "startRadius": 75,
+      "endRadius": 55,
+      "damagePerSecond": 1,
+      "centreBiasToPlayers": 0.15,
+      "maxRotationDistance": -1,
+      "description": "The sandbox storm, scaled to the sandbox island rather than to a map. Same seven phases and the same lighting keyframes as a match; a fifth of the radius and a little over a third of the clock, so a whole night passes in six and a half minutes of testing."
+    },
+    {
+      "id": "storm.sandbox1",
+      "displayName": "Sandbox phase 1",
+      "phaseIndex": 1,
+      "waitSeconds": 35,
+      "closeSeconds": 35,
+      "startRadius": 55,
+      "endRadius": 40,
+      "damagePerSecond": 2,
+      "centreBiasToPlayers": 0.2,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.sandbox2",
+      "displayName": "Sandbox phase 2",
+      "phaseIndex": 2,
+      "waitSeconds": 30,
+      "closeSeconds": 30,
+      "startRadius": 40,
+      "endRadius": 28,
+      "damagePerSecond": 3,
+      "centreBiasToPlayers": 0.28,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.sandbox3",
+      "displayName": "Sandbox phase 3",
+      "phaseIndex": 3,
+      "waitSeconds": 25,
+      "closeSeconds": 25,
+      "startRadius": 28,
+      "endRadius": 18,
+      "damagePerSecond": 5,
+      "centreBiasToPlayers": 0.34,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.sandbox4",
+      "displayName": "Sandbox phase 4",
+      "phaseIndex": 4,
+      "waitSeconds": 20,
+      "closeSeconds": 20,
+      "startRadius": 18,
+      "endRadius": 10,
+      "damagePerSecond": 7,
+      "centreBiasToPlayers": 0.4,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.sandbox5",
+      "displayName": "Sandbox phase 5",
+      "phaseIndex": 5,
+      "waitSeconds": 20,
+      "closeSeconds": 20,
+      "startRadius": 10,
+      "endRadius": 5,
+      "damagePerSecond": 10,
+      "centreBiasToPlayers": 0.46,
+      "maxRotationDistance": -1
+    },
+    {
+      "id": "storm.sandbox6",
+      "displayName": "Sandbox phase 6",
+      "phaseIndex": 6,
+      "waitSeconds": 15,
+      "closeSeconds": 25,
+      "startRadius": 5,
+      "endRadius": 0,
+      "damagePerSecond": 10,
+      "centreBiasToPlayers": 0.52,
+      "maxRotationDistance": -1
+    }
   ],
   "lighting": [
-    { "id": "lighting.nightfall", "displayName": "Nightfall lighting",
+    {
+      "id": "lighting.nightfall",
+      "displayName": "Nightfall lighting",
       "description": "Dusk to sunrise across seven phases. Ambient level never affects gameplay; minPlayerRimIntensity is the floor that keeps players readable in deep night.",
       "minPlayerRimIntensity": 0.4,
       "keyframesByPhase": [
-        { "phaseIndex": 0, "sunColour": "#ffc285", "sunIntensity": 1.1,
-          "fogColour": "#8c736b", "fogDensity": 0.006, "sunElevationDegrees": 8 },
-        { "phaseIndex": 1, "sunColour": "#b3a8d9", "sunIntensity": 0.55,
-          "fogColour": "#524f73", "fogDensity": 0.01, "sunElevationDegrees": -4 },
-        { "phaseIndex": 2, "sunColour": "#858cd9", "sunIntensity": 0.35,
-          "fogColour": "#383b61", "fogDensity": 0.013, "sunElevationDegrees": -14 },
-        { "phaseIndex": 3, "sunColour": "#6170c7", "sunIntensity": 0.18,
-          "fogColour": "#1f2442", "fogDensity": 0.017, "sunElevationDegrees": -22 },
-        { "phaseIndex": 4, "sunColour": "#7a7abd", "sunIntensity": 0.26,
-          "fogColour": "#2b2c4d", "fogDensity": 0.015, "sunElevationDegrees": -10 },
-        { "phaseIndex": 5, "sunColour": "#eba88c", "sunIntensity": 0.7,
-          "fogColour": "#705e66", "fogDensity": 0.009, "sunElevationDegrees": 2 },
-        { "phaseIndex": 6, "sunColour": "#ffdba8", "sunIntensity": 1.2,
-          "fogColour": "#9e8c7a", "fogDensity": 0.005, "sunElevationDegrees": 12 }
-      ] }
+        {
+          "phaseIndex": 0,
+          "sunColour": "#ffc285",
+          "sunIntensity": 1.1,
+          "fogColour": "#8c736b",
+          "fogDensity": 0.006,
+          "sunElevationDegrees": 8
+        },
+        {
+          "phaseIndex": 1,
+          "sunColour": "#b3a8d9",
+          "sunIntensity": 0.55,
+          "fogColour": "#524f73",
+          "fogDensity": 0.01,
+          "sunElevationDegrees": -4
+        },
+        {
+          "phaseIndex": 2,
+          "sunColour": "#858cd9",
+          "sunIntensity": 0.35,
+          "fogColour": "#383b61",
+          "fogDensity": 0.013,
+          "sunElevationDegrees": -14
+        },
+        {
+          "phaseIndex": 3,
+          "sunColour": "#6170c7",
+          "sunIntensity": 0.18,
+          "fogColour": "#1f2442",
+          "fogDensity": 0.017,
+          "sunElevationDegrees": -22
+        },
+        {
+          "phaseIndex": 4,
+          "sunColour": "#7a7abd",
+          "sunIntensity": 0.26,
+          "fogColour": "#2b2c4d",
+          "fogDensity": 0.015,
+          "sunElevationDegrees": -10
+        },
+        {
+          "phaseIndex": 5,
+          "sunColour": "#eba88c",
+          "sunIntensity": 0.7,
+          "fogColour": "#705e66",
+          "fogDensity": 0.009,
+          "sunElevationDegrees": 2
+        },
+        {
+          "phaseIndex": 6,
+          "sunColour": "#ffdba8",
+          "sunIntensity": 1.2,
+          "fogColour": "#9e8c7a",
+          "fogDensity": 0.005,
+          "sunElevationDegrees": 12
+        }
+      ]
+    }
   ],
   "matchRules": [
-    { "id": "rules.solo", "displayName": "Solo", "squadSize": 1, "maxPlayers": 30,
-      "allowDbno": false, "dbnoHealth": 100, "dbnoBleedPerSecond": 2, "reviveSeconds": 8,
-      "stormPhaseIds": ["storm.phase0", "storm.phase1", "storm.phase2", "storm.phase3",
-                        "storm.phase4", "storm.phase5", "storm.phase6"],
-      "lightingId": "lighting.nightfall", "busSeconds": 30, "gliderDeployAltitude": 35,
-      "startingLoadoutIds": ["weapon.pickaxe"], "friendlyFire": false },
-    { "id": "rules.duos", "displayName": "Duos", "squadSize": 2, "maxPlayers": 30,
-      "allowDbno": true, "dbnoHealth": 100, "dbnoBleedPerSecond": 2, "reviveSeconds": 8,
-      "stormPhaseIds": ["storm.phase0", "storm.phase1", "storm.phase2", "storm.phase3",
-                        "storm.phase4", "storm.phase5", "storm.phase6"],
-      "lightingId": "lighting.nightfall", "busSeconds": 30, "gliderDeployAltitude": 35,
-      "startingLoadoutIds": ["weapon.pickaxe"], "friendlyFire": false },
-    { "id": "rules.trios", "displayName": "Trios", "squadSize": 3, "maxPlayers": 30,
+    {
+      "id": "rules.solo",
+      "displayName": "Solo",
+      "squadSize": 1,
+      "maxPlayers": 30,
+      "allowDbno": false,
+      "dbnoHealth": 100,
+      "dbnoBleedPerSecond": 2,
+      "reviveSeconds": 8,
+      "stormPhaseIds": [
+        "storm.phase0",
+        "storm.phase1",
+        "storm.phase2",
+        "storm.phase3",
+        "storm.phase4",
+        "storm.phase5",
+        "storm.phase6"
+      ],
+      "lightingId": "lighting.nightfall",
+      "busSeconds": 30,
+      "gliderDeployAltitude": 35,
+      "startingLoadoutIds": [
+        "weapon.pickaxe"
+      ],
+      "friendlyFire": false
+    },
+    {
+      "id": "rules.duos",
+      "displayName": "Duos",
+      "squadSize": 2,
+      "maxPlayers": 30,
+      "allowDbno": true,
+      "dbnoHealth": 100,
+      "dbnoBleedPerSecond": 2,
+      "reviveSeconds": 8,
+      "stormPhaseIds": [
+        "storm.phase0",
+        "storm.phase1",
+        "storm.phase2",
+        "storm.phase3",
+        "storm.phase4",
+        "storm.phase5",
+        "storm.phase6"
+      ],
+      "lightingId": "lighting.nightfall",
+      "busSeconds": 30,
+      "gliderDeployAltitude": 35,
+      "startingLoadoutIds": [
+        "weapon.pickaxe"
+      ],
+      "friendlyFire": false
+    },
+    {
+      "id": "rules.trios",
+      "displayName": "Trios",
+      "squadSize": 3,
+      "maxPlayers": 30,
       "description": "Trios rather than squads of four: 30 does not divide by 4, and one lobby size across every mode matters for matchmaking at this scale.",
-      "allowDbno": true, "dbnoHealth": 100, "dbnoBleedPerSecond": 2, "reviveSeconds": 8,
-      "stormPhaseIds": ["storm.phase0", "storm.phase1", "storm.phase2", "storm.phase3",
-                        "storm.phase4", "storm.phase5", "storm.phase6"],
-      "lightingId": "lighting.nightfall", "busSeconds": 30, "gliderDeployAltitude": 35,
-      "startingLoadoutIds": ["weapon.pickaxe"], "friendlyFire": false }
+      "allowDbno": true,
+      "dbnoHealth": 100,
+      "dbnoBleedPerSecond": 2,
+      "reviveSeconds": 8,
+      "stormPhaseIds": [
+        "storm.phase0",
+        "storm.phase1",
+        "storm.phase2",
+        "storm.phase3",
+        "storm.phase4",
+        "storm.phase5",
+        "storm.phase6"
+      ],
+      "lightingId": "lighting.nightfall",
+      "busSeconds": 30,
+      "gliderDeployAltitude": 35,
+      "startingLoadoutIds": [
+        "weapon.pickaxe"
+      ],
+      "friendlyFire": false
+    },
+    {
+      "id": "rules.sandbox",
+      "displayName": "Sandbox",
+      "squadSize": 1,
+      "maxPlayers": 30,
+      "allowDbno": false,
+      "dbnoHealth": 100,
+      "dbnoBleedPerSecond": 2,
+      "reviveSeconds": 8,
+      "stormPhaseIds": [
+        "storm.sandbox0",
+        "storm.sandbox1",
+        "storm.sandbox2",
+        "storm.sandbox3",
+        "storm.sandbox4",
+        "storm.sandbox5",
+        "storm.sandbox6"
+      ],
+      "lightingId": "lighting.nightfall",
+      "busSeconds": 30,
+      "gliderDeployAltitude": 35,
+      "startingLoadoutIds": [
+        "weapon.pickaxe"
+      ],
+      "friendlyFire": false,
+      "description": "What the build sandbox runs. It differs from Solo in one field -- the phase list -- which is the whole point: a faster storm is an asset, not a code path."
+    }
   ]
 }

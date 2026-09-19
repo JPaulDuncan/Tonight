@@ -35,7 +35,7 @@ Two ideas, and everything follows from them.
 **The simulation does not know the renderer exists.**
 
 `src/gameplay` imports no three.js and touches no DOM. That is not stylistic: it
-is what lets 288 tests run in Node in under two seconds, and it is what will let
+is what lets 313 tests run in Node in under two seconds, and it is what will let
 the same code run on an authoritative server without a rewrite.
 
 The boundary is enforced by review and by the tests themselves — a test that
@@ -49,7 +49,7 @@ core           grid, RNG, math. No engine, no DOM, no dependencies.
 blueprints     schema, registry, validation. Depends on core.
   ▲
 gameplay       motor, build, combat, combatant, consumable, bot,
-               harvest, loot, storm.
+               harvest, loot, storm, nightclock.
                Depends on core + blueprints. NEVER on render.
   ▲
 render         three.js scene, collision, meshes, HUD, input.

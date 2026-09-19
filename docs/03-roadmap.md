@@ -141,8 +141,12 @@ Weapons, damage, loot. Still single-player, against dummies.
       `Combatant` type covers the player and every bot, shields are spent before
       health, consumables channel and are spent on completion, and an
       eliminated player or bot respawns on its Blueprint's timer.
+- [x] The storm runs: the circle closes on the sandbox island, standing outside
+      costs health once a second, the wall and both boundary rings are drawn,
+      and the night clock takes the sky from dusk to sunrise across the phases.
 - [x] **A new weapon needs one JSON entry and one mesh.**
 - [x] **A harder opponent needs one JSON entry and no code.**
+- [x] **A retuned storm is one JSON entry and no code.**
 
 **Risk retired:** combat feel is achievable with the chosen feedback model.
 
@@ -168,7 +172,8 @@ at once.
       reconciliation buffer itself has not been ported yet.
 - [~] Lag compensation. Designed and specified; not ported.
 - [x] Storm across all seven phases: monotonic shrink, reproducible from seed,
-      and no player stranded beyond the rotation clamp.
+      and no player stranded beyond the rotation clamp. Now also *running* --
+      in the sandbox, against one player, on its own scaled phase list.
 - [~] Match flow. Ported in the Unity version; not yet re-ported.
 - [ ] **30 clients hold a 30 Hz server tick**, measured.
 - [ ] **Rendering holds up with 30 players and thousands of build pieces in

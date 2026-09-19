@@ -24,6 +24,23 @@ export interface HudConsumable {
   readonly count: number;
 }
 
+/** What the storm panel shows. */
+export interface HudStorm {
+  readonly phase: number;
+  /** `waiting`, `closing`, or `paused`. */
+  readonly state: string;
+  readonly secondsRemaining: number;
+  readonly outside: boolean;
+  /**
+   * Where safety is, in degrees clockwise from straight ahead.
+   *
+   * Relative to the player's facing rather than to north, because the question
+   * it answers is "which way do I run", and a compass rose would make that a
+   * second calculation to do while on fire.
+   */
+  readonly bearingDegrees: number;
+}
+
 export interface HudModel {
   readonly health: number;
   readonly maxHealth: number;
@@ -40,6 +57,7 @@ export interface HudModel {
   readonly channelLabel: string;
   readonly channelFraction: number;
   readonly consumables: readonly HudConsumable[];
+  readonly storm: HudStorm;
   readonly materials: Record<string, number>;
   readonly selectedMaterialId: string;
   readonly selectedPieceId: string;
@@ -99,6 +117,16 @@ export class Hud {
           <span class="hud-channel-label" id="hud-channel-label"></span>
         </div>
       </div>
+      <div class="hud-storm-panel" id="hud-storm">
+        <div class="hud-storm-line">
+          <span class="hud-storm-state" id="hud-storm-state">WAITING</span>
+          <span id="hud-storm-clock">0:00</span>
+        </div>
+        <div class="hud-storm-warning" id="hud-storm-warning">
+          <span class="hud-storm-arrow" id="hud-storm-arrow">&#10148;</span> IN THE STORM
+        </div>
+      </div>
+      <div class="hud-storm-vignette" id="hud-storm-vignette"></div>
       <div class="hud-feed" id="hud-feed"></div>
       <div class="hud-eliminated" id="hud-eliminated">
         <div class="hud-eliminated-title">ELIMINATED</div>
@@ -130,6 +158,18 @@ export class Hud {
       this.setWidth("hud-channel-fill", model.channelFraction);
       this.setText("hud-channel-label", model.channelLabel);
     }
+
+    const clock = Math.max(0, Math.ceil(model.storm.secondsRemaining));
+    this.setText("hud-storm-state", `PHASE ${model.storm.phase + 1} · ${model.storm.state.toUpperCase()}`);
+    this.setText(
+      "hud-storm-clock",
+      `${Math.floor(clock / 60)}:${String(clock % 60).padStart(2, "0")}`,
+    );
+    this.setDisplay("hud-storm-warning", model.storm.outside ? "flex" : "none");
+    this.setOpacity("hud-storm-vignette", model.storm.outside ? 1 : 0);
+    const arrow = this.root.querySelector<HTMLElement>("#hud-storm-arrow");
+    // The glyph points right at rest, so due-ahead is a quarter turn back.
+    if (arrow) arrow.style.transform = `rotate(${model.storm.bearingDegrees - 90}deg)`;
 
     const feed = this.root.querySelector("#hud-feed");
     if (feed) {

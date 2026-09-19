@@ -166,6 +166,21 @@ export class StormDirector {
     return this.phases.reduce((sum, p) => sum + phaseTotalSeconds(p), 0);
   }
 
+  /**
+   * How far through the current phase, 0..1.
+   *
+   * The night clock's hand: lighting keyframes are per phase, so this is what
+   * says where between two of them the sky currently is. Distinct from
+   * {@link progress}, which is the whole match and moves at a different rate
+   * because phases differ in length.
+   */
+  get phaseFraction(): number {
+    const phase = this.currentPhase;
+    if (!phase) return 1;
+    const total = phaseTotalSeconds(phase);
+    return total <= 0 ? 1 : clamp01(this.phaseElapsed / total);
+  }
+
   /** Normalised match progress, which drives the night-clock lighting. */
   get progress(): number {
     if (this.phases.length === 0) return 0;

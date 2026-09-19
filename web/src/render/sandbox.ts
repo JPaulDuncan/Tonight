@@ -19,7 +19,7 @@ import {
   slotRotationY,
   type GridCell,
 } from "@/core/grid";
-import { vec2, vec3, type Vec3 } from "@/core/math";
+import { vec2, vec3, type Vec2, type Vec3 } from "@/core/math";
 import { MoveFlags, PlacementRejection, moveCommand } from "@/gameplay/commands";
 import {
   BuildWorld, resolveEditTarget, resolvePlacement, placementTransform, variantForMask,
@@ -38,6 +38,8 @@ import {
   type ChannelState,
 } from "@/gameplay/consumable";
 import { decideBot, freshBotState, provoke, resetBotState, type BotState } from "@/gameplay/bot";
+import { StormDirector, stormContains } from "@/gameplay/storm";
+import { skyAt, sunPosition, type SkyState } from "@/gameplay/nightclock";
 import { harvestHit, harvestStateFor, weakPointFor, type HarvestState } from "@/gameplay/harvest";
 import {
   TICK_DELTA, TICK_RATE, motorAtRest, stepMotor, yawRotate, type MotorState,
@@ -169,6 +171,30 @@ const BOT_SPAWNS = [
 /** Bots read as not-you at a glance. Nothing gameplay hangs off the colour. */
 const BOT_TINT = 0xb2564f;
 
+/**
+ * Which mode the sandbox runs.
+ *
+ * Solo's storm is sized for a map that does not exist yet: its first circle is
+ * 800 m across an island 200 m wide, so it would never touch anybody. The
+ * sandbox rules differ from Solo in exactly one field, the phase list -- which
+ * is what storm.md section 5 promises a retuned storm is.
+ */
+const SANDBOX_RULES = "rules.sandbox";
+
+/**
+ * How hard the sun is driven relative to its authored intensity.
+ *
+ * The keyframes are authored as a curve rather than in lux; this is the one
+ * scalar that turns the curve into a lit scene.
+ */
+const SUN_BOOST = 1.6;
+
+/** How tall the wall is drawn. Taller than anything anyone can build. */
+const STORM_WALL_HEIGHT = 70;
+
+/** Segments around the wall and the next-circle ring. */
+const STORM_SEGMENTS = 72;
+
 /** Seconds the player spends eliminated before standing back up. */
 const PLAYER_RESPAWN_SECONDS = 4;
 
@@ -271,6 +297,19 @@ export class Sandbox {
   private player!: Combatant;
   private readonly bots: BotInstance[] = [];
   private readonly feed = new EliminationFeed();
+  private storm!: StormDirector;
+  private stormWall!: THREE.Mesh;
+  /** Where the boundary is now, and where it is going. */
+  private stormEdge!: THREE.LineLoop;
+  private stormNextRing!: THREE.LineLoop;
+  private ringCentre = vec2();
+  private ringRadius = -1;
+  private stormPaused = false;
+  /** Seconds accrued toward the next damage tick. The storm ticks once a second. */
+  private stormTickAccumulator = 0;
+  private stormDamageTaken = 0;
+  private sun!: THREE.DirectionalLight;
+  private sky!: SkyState;
   private readonly channel: ChannelState = freshChannel();
   private readonly stock = new Map<string, number>();
   private spawnPoint = vec3();
@@ -337,6 +376,16 @@ export class Sandbox {
     for (const id of ["material.wood", "material.stone", "material.metal"]) {
       this.world.wallet(PLAYER_ID).add(registry.get<BuildMaterialBlueprint>(id), 500);
     }
+
+    // The storm runs from the first frame, seeded from the terrain so a given
+    // island always gets the same night.
+    const rules = registry.matchRules(SANDBOX_RULES);
+    this.storm = new StormDirector(
+      rules.stormPhaseIds.map((id) => registry.stormPhase(id)),
+      SANDBOX_TERRAIN.seed,
+      registry.movement(character.movementId).sprintSpeed,
+      vec2(0, 0),
+    );
 
     this.player = makeCombatant(PLAYER_ID, "You", character);
     this.spawnPoint = vec3(0, this.field.sample(0, 0) + 1, 0);
@@ -424,6 +473,32 @@ export class Sandbox {
         };
       },
       describeFeedback: () => this.feedback.describe(),
+      describeStorm: () => {
+        const state = this.storm.current;
+        return {
+          phase: state.phaseIndex,
+          closing: state.isClosing,
+          paused: this.stormPaused,
+          radius: Number(state.radius.toFixed(2)),
+          centre: [Number(state.centre.x.toFixed(2)), Number(state.centre.y.toFixed(2))],
+          nextRadius: Number(state.nextRadius.toFixed(2)),
+          nextCentre: [
+            Number(state.nextCentre.x.toFixed(2)), Number(state.nextCentre.y.toFixed(2)),
+          ],
+          secondsRemaining: Number(state.secondsRemainingInStage.toFixed(2)),
+          outside: this.outsideStorm,
+          distanceFromCentre: Number(Math.hypot(
+            this.motor.position.x - state.centre.x, this.motor.position.z - state.centre.y,
+          ).toFixed(2)),
+          damageTaken: Number(this.stormDamageTaken.toFixed(2)),
+          sky: {
+            sunElevation: Number(this.sky.sunElevationDegrees.toFixed(2)),
+            sunIntensity: Number(this.sky.sunIntensity.toFixed(3)),
+            fogDensity: Number(this.sky.fogDensity.toFixed(4)),
+            rimIntensity: this.sky.rimIntensity,
+          },
+        };
+      },
       describeSurvival: () => ({
         player: {
           health: Number(this.player.pool.health.toFixed(2)),
@@ -497,27 +572,33 @@ export class Sandbox {
     this.scene.background = new THREE.Color("#2a2338");
     this.scene.fog = new THREE.FogExp2(new THREE.Color(dusk.fogColour), dusk.fogDensity);
 
-    const sun = new THREE.DirectionalLight(new THREE.Color(dusk.sunColour), dusk.sunIntensity * 1.6);
-    const elevation = (dusk.sunElevationDegrees * Math.PI) / 180;
-    sun.position.set(Math.cos(elevation) * 120, Math.sin(elevation) * 120 + 40, 60);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -90;
-    sun.shadow.camera.right = 90;
-    sun.shadow.camera.top = 90;
-    sun.shadow.camera.bottom = -90;
-    sun.shadow.camera.far = 400;
-    this.scene.add(sun);
+    this.sun = new THREE.DirectionalLight(
+      new THREE.Color(dusk.sunColour), dusk.sunIntensity * SUN_BOOST,
+    );
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.camera.left = -90;
+    this.sun.shadow.camera.right = 90;
+    this.sun.shadow.camera.top = 90;
+    this.sun.shadow.camera.bottom = -90;
+    this.sun.shadow.camera.far = 500;
+    this.scene.add(this.sun);
+    this.applyNightClock();
 
     // The rim floor from MatchLightingBlueprint: ambient never drops far enough
     // to make darkness a stealth mechanic (vision pillar 2). The sandbox scales
     // it up further because reading your own structure matters more here than
     // atmosphere does; a match would use the floor directly.
+    // Constant across the night on purpose. The sun's colour and intensity
+    // carry the hours; the ambient floor does not move, because the moment it
+    // does, how well you can see another player depends on the clock -- and
+    // that is the stealth mechanic storm.md section 3 forbids outright.
     const SANDBOX_AMBIENT_BOOST = 4;
     this.scene.add(new THREE.HemisphereLight(
       0x9aa8d8, 0x3a3848, lighting.minPlayerRimIntensity * SANDBOX_AMBIENT_BOOST));
 
     this.scene.add(this.terrainMesh());
+    this.makeStorm();
     this.scatter();
     this.makeAvatar();
     this.spawnBots();
@@ -1041,6 +1122,13 @@ export class Sandbox {
         return;
       }
 
+      // The storm is the match clock, and a sandbox is for iterating on
+      // building without one. It runs by default and this stops it where it is.
+      if (event.code === "KeyP" && !event.repeat) {
+        this.stormPaused = !this.stormPaused;
+        this.say(this.stormPaused ? "storm paused" : "storm running");
+      }
+
       if (event.code === "KeyQ") this.buildMode = !this.buildMode;
       // R reloads, as it does in every shooter. Resetting the world is a
       // sandbox convenience and gives up the letter.
@@ -1082,6 +1170,8 @@ export class Sandbox {
     }
     for (const bot of this.bots) this.reviveBot(bot);
     this.feed.clear();
+    this.restartStorm();
+    this.stormDamageTaken = 0;
     this.damageTaken = 0;
     this.shieldAbsorbed = 0;
     this.botShotsFired = 0;
@@ -1111,6 +1201,8 @@ export class Sandbox {
     }
 
     this.expireTracers();
+    this.updateStorm();
+    this.applyNightClock();
     this.feedback.update(this, performance.now());
     this.updateAvatar(delta);
     this.updateCamera();
@@ -1141,6 +1233,7 @@ export class Sandbox {
         name: blueprints().get<ConsumableBlueprint>(itemId).displayName,
         count: this.stock.get(itemId) ?? 0,
       })),
+      storm: this.stormHud(),
       materials: this.world.wallet(PLAYER_ID).snapshot(),
       selectedMaterialId: this.selectedMaterialId,
       selectedPieceId: this.selectedPieceId,
@@ -1203,6 +1296,7 @@ export class Sandbox {
 
     this.tickChannel();
     this.tickBots();
+    this.tickStorm();
 
     if (dead) {
       // Still release the trigger, or the weapon believes it is held down
@@ -1480,6 +1574,204 @@ export class Sandbox {
   }
 
   /** Nearest harvestable the ray passes close enough to count as a hit. */
+  // -----------------------------------------------------------------------
+  // The storm
+  // -----------------------------------------------------------------------
+
+  /**
+   * The wall, and the ring where the next circle will be.
+   *
+   * The wall is a bare cylinder seen from the inside: no top, no bottom, and
+   * it does not write depth, so standing in it does not black out the sky and
+   * the crosshair stays readable through it. It is scaled rather than rebuilt,
+   * because the radius changes every frame while closing.
+   *
+   * The ring is the "next circle" half of storm.md section 4's map overlay,
+   * drawn on the ground instead of on a map the sandbox does not have. It
+   * follows the terrain, so it reads as a line painted on the island rather
+   * than as a hoop floating through the hills.
+   */
+  private makeStorm(): void {
+    const wall = new THREE.CylinderGeometry(1, 1, 1, STORM_SEGMENTS, 1, true);
+    this.stormWall = new THREE.Mesh(
+      wall,
+      new THREE.MeshBasicMaterial({
+        color: 0x8f6ce0,
+        transparent: true,
+        opacity: 0.17,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        fog: false,
+      }),
+    );
+    this.stormWall.renderOrder = 2;
+    this.scene.add(this.stormWall);
+
+    this.stormEdge = this.makeGroundRing(0xe4d8ff, 1);
+    this.stormNextRing = this.makeGroundRing(0x9f83e8, 0.7);
+  }
+
+  /** A closed line on the ground, used for both circles. */
+  private makeGroundRing(colour: number, opacity: number): THREE.LineLoop {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position", new THREE.BufferAttribute(new Float32Array((STORM_SEGMENTS + 1) * 3), 3),
+    );
+    const ring = new THREE.LineLoop(
+      geometry,
+      new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity, fog: false }),
+    );
+    this.scene.add(ring);
+    return ring;
+  }
+
+  /** The player's position in the storm's plane. */
+  private playerGround(): Vec2 {
+    return vec2(this.motor.position.x, this.motor.position.z);
+  }
+
+  private get outsideStorm(): boolean {
+    return !stormContains(this.storm.current, this.playerGround());
+  }
+
+  /**
+   * Advance the storm and, once a second, bill anybody standing outside it.
+   *
+   * A second rather than a tick, per storm.md section 1. Thirty damage events
+   * a second would be arithmetically identical and unreadable: the numbers
+   * would be a thirtieth of a point each, and the feedback layer would spend a
+   * whole pool of them per second.
+   *
+   * Bots are exempt. They do not move, so a storm that damaged them would
+   * spend the late phases reciting the same three names into the kill feed.
+   */
+  private tickStorm(): void {
+    if (this.stormPaused) return;
+
+    this.storm.advance(TICK_DELTA, this.player.alive ? [this.playerGround()] : []);
+
+    // Nothing ends a sandbox, so the night starts over rather than leaving a
+    // zero-radius circle quietly killing whoever is left.
+    if (this.storm.finished) {
+      this.restartStorm();
+      this.say("the storm starts over");
+      return;
+    }
+
+    this.stormTickAccumulator += TICK_DELTA;
+    if (this.stormTickAccumulator < 1) return;
+    this.stormTickAccumulator -= 1;
+
+    if (!this.player.alive) return;
+    const damage = this.storm.damageFor(this.playerGround(), 1);
+    if (damage <= 0) return;
+
+    const outcome = damageHealthDirectly(
+      this.player, damage, this.tick, PLAYER_RESPAWN_SECONDS * TICK_RATE,
+    );
+    this.stormDamageTaken += outcome.toHealth;
+    this.onPlayerDamaged(outcome.toHealth);
+
+    // Shown where the player is standing, in its own colour: the storm is not
+    // somebody shooting at you, and a white number would say it was.
+    this.feedback.showNumber(
+      outcome.toHealth,
+      { x: this.motor.position.x, y: this.motor.position.y + 1.5, z: this.motor.position.z },
+      "storm",
+      false,
+      performance.now(),
+    );
+
+    if (outcome.eliminated) this.eliminatePlayer("the storm", "");
+  }
+
+  private restartStorm(): void {
+    const registry = blueprints();
+    const rules = registry.matchRules(SANDBOX_RULES);
+    this.storm = new StormDirector(
+      rules.stormPhaseIds.map((id) => registry.stormPhase(id)),
+      SANDBOX_TERRAIN.seed + this.tick,
+      registry.movement("movement.default").sprintSpeed,
+      vec2(0, 0),
+    );
+    this.stormTickAccumulator = 0;
+    this.ringRadius = -1;
+  }
+
+  /** Move the wall to where the circle is now, and redraw the ring if it moved. */
+  private updateStorm(): void {
+    const state = this.storm.current;
+    const ground = this.field.sample(state.centre.x, state.centre.y);
+
+    this.stormWall.visible = state.radius > 0.5;
+    this.stormWall.position.set(state.centre.x, ground + STORM_WALL_HEIGHT / 2 - 12, state.centre.y);
+    this.stormWall.scale.set(state.radius, STORM_WALL_HEIGHT, state.radius);
+
+    // The boundary drawn on the ground as well as in the air. From outside, a
+    // 150 m cylinder seen from eight metres away fills the screen with an even
+    // haze and says nothing about which way out is; the line on the ground says
+    // exactly where safety starts.
+    this.stormEdge.visible = state.radius > 0.5;
+    if (this.stormEdge.visible) this.drawGroundRing(this.stormEdge, state.centre, state.radius);
+
+    // The next circle only moves when the phase does, and 72 terrain samples
+    // per frame to redraw an unchanged line would be 72 too many.
+    const moved =
+      Math.abs(state.nextRadius - this.ringRadius) > 0.01
+      || Math.hypot(state.nextCentre.x - this.ringCentre.x, state.nextCentre.y - this.ringCentre.y) > 0.01;
+    if (moved) {
+      this.ringRadius = state.nextRadius;
+      this.ringCentre = state.nextCentre;
+      this.drawGroundRing(this.stormNextRing, state.nextCentre, state.nextRadius);
+    }
+    this.stormNextRing.visible = state.nextRadius > 0.5;
+  }
+
+  /** Lay a ring over the terrain, so it reads as paint rather than as a hoop. */
+  private drawGroundRing(ring: THREE.LineLoop, centre: Vec2, radius: number): void {
+    const position = ring.geometry.getAttribute("position") as THREE.BufferAttribute;
+    for (let i = 0; i <= STORM_SEGMENTS; i++) {
+      const angle = (i / STORM_SEGMENTS) * Math.PI * 2;
+      const x = centre.x + Math.cos(angle) * radius;
+      const z = centre.y + Math.sin(angle) * radius;
+      position.setXYZ(i, x, this.field.sample(x, z) + 0.35, z);
+    }
+    position.needsUpdate = true;
+    ring.geometry.computeBoundingSphere();
+  }
+
+  /**
+   * Push the storm's hour into the sky.
+   *
+   * The sun never actually drops below the horizon, whatever the keyframe
+   * says. A directional light under the ground lights the undersides of
+   * everything and reads as a rendering bug rather than as night; the
+   * elevation drives where the shadows point and, through the keyframe's own
+   * colour and intensity, how dark it gets.
+   */
+  private applyNightClock(): void {
+    const lighting = blueprints().lighting("lighting.nightfall");
+    const sky = skyAt(lighting, this.storm.phaseIndex, this.storm.phaseFraction);
+    this.sky = sky;
+
+    this.sun.color.setRGB(sky.sun.r, sky.sun.g, sky.sun.b);
+    this.sun.intensity = sky.sunIntensity * SUN_BOOST;
+
+    const SUN_DISTANCE = 180;
+    const at = sunPosition(sky.sunElevationDegrees, SUN_DISTANCE);
+    this.sun.position.set(at.x, Math.max(at.y, SUN_DISTANCE * 0.22), at.z);
+
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.color.setRGB(sky.fog.r, sky.fog.g, sky.fog.b);
+      this.scene.fog.density = sky.fogDensity;
+    }
+    // The horizon has to agree with the fog, or the island sits in a band of
+    // the wrong colour.
+    if (this.scene.background instanceof THREE.Color) {
+      this.scene.background.setRGB(sky.fog.r * 0.7, sky.fog.g * 0.7, sky.fog.b * 0.78);
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Staying alive
   // -----------------------------------------------------------------------
@@ -2011,6 +2303,25 @@ export class Sandbox {
       x: (point.x * 0.5 + 0.5) * width,
       y: (-point.y * 0.5 + 0.5) * height,
       visible: point.z < 1,
+    };
+  }
+
+  /** What the HUD shows about the storm. */
+  private stormHud() {
+    const state = this.storm.current;
+    // Which way safety is, relative to where the player is looking: the
+    // question is "which way do I run", and a compass rose would make that a
+    // second calculation to do while on fire.
+    const bearing =
+      (Math.atan2(state.centre.x - this.motor.position.x, state.centre.y - this.motor.position.z)
+        * 180) / Math.PI - this.motor.yaw;
+
+    return {
+      phase: state.phaseIndex,
+      state: this.stormPaused ? "paused" : state.isClosing ? "closing" : "waiting",
+      secondsRemaining: state.secondsRemainingInStage,
+      outside: this.outsideStorm,
+      bearingDegrees: ((bearing % 360) + 540) % 360 - 180,
     };
   }
 

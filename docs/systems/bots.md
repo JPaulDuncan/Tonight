@@ -98,7 +98,8 @@ walking toward one is a decision rather than an ambush.
 ## 7. What this is not
 
 Bots are not the multiplayer stand-in. They do not move, take cover, build, or
-push. The pickaxe does not damage them either, because §9 of
+push — which is also why the storm leaves them alone
+([storm.md](storm.md) §4.1). The pickaxe does not damage them either, because §9 of
 [combat.md](combat.md) has not yet decided whether it damages players at all,
 and guessing here would make the answer harder to change.
 

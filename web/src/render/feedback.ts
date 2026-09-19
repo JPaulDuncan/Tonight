@@ -16,7 +16,14 @@
 
 import type { Vec3 } from "@/core/math";
 
-export type HitKind = "player" | "structure" | "harvestable";
+/**
+ * What was hit.
+ *
+ * `storm` is the odd one out: nobody hit anything, the world billed you. It
+ * gets its own number colour and no marker, because a hit marker confirms that
+ * your shot connected and the storm is not your shot.
+ */
+export type HitKind = "player" | "structure" | "harvestable" | "storm";
 
 /** Seconds a damage number stays on screen. */
 export const NUMBER_LIFETIME = 0.9;
@@ -73,6 +80,7 @@ export function numberRise(fraction: number): number {
 export function numberClass(kind: HitKind, headshot: boolean): string {
   if (kind === "player") return headshot ? "dmg-headshot" : "dmg-player";
   if (kind === "structure") return "dmg-structure";
+  if (kind === "storm") return "dmg-storm";
   return "dmg-harvestable";
 }
 
